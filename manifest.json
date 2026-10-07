@@ -1,0 +1,24 @@
+{
+  "name": "Joolry Daily",
+  "short_name": "Joolry",
+  "description": "Joolry Daily — Attendance, Tasks, Delegation & Analytics",
+  "start_url": "./index.html?pwa=1",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#111111",
+  "theme_color": "#111111",
+  "lang": "en-IN",
+  "scope": "./",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon-180.png", "sizes": "180x180", "type": "image/png", "purpose": "apple-touch-icon" }
+  ],
+  "categories": ["business", "productivity"],
+  "shortcuts": [
+    { "name": "Dashboard",  "url": "./index.html?v=dash",   "icons": [{"src":"icon-192.png","sizes":"192x192"}] },
+    { "name": "Checklist",  "url": "./index.html?v=check",  "icons": [{"src":"icon-192.png","sizes":"192x192"}] },
+    { "name": "Attendance", "url": "./index.html?v=attend", "icons": [{"src":"icon-192.png","sizes":"192x192"}] }
+  ],
+  "prefer_related_applications": false
+}
