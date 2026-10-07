@@ -1,0 +1,14 @@
+# secrets
+.env
+.env.*
+*serviceAccount*.json
+*firebase-adminsdk*.json
+
+# dependencies / build
+node_modules/
+.vercel/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
