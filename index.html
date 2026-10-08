@@ -14616,110 +14616,41 @@
       }
     }
 
-    function _gas(fn, args, onOk, onErr, _retryCount) {
+    // ── RPC bridge → Vercel /api/rpc (same-origin, signed session token, no secrets in browser) ──
+    // Reads (get*/validate*) are retried once on network failure. Writes are NEVER auto-retried
+    // (a retry could create duplicate check-ins / tasks / payroll rows).
+    function _rpc(fn, args, timeout, onOk, onErr, tryNo) {
       _lbShow();
-      var sendArgs = (args || []).concat([_U]);
-      var cb = '_cb' + Date.now() + Math.floor(Math.random() * 9999);
-      var payload = encodeURIComponent(JSON.stringify({action: fn, args: sendArgs}));
-      var url = GAS_URL + '?callback=' + cb + '&payload=' + payload;
-
-      var done = false;
-      var script = document.createElement('script');
-      var retries = _retryCount || 0;
-
-      var timer = setTimeout(function () {
-        if (done) return;
-        done = true; _lbHide();
-        script.remove();
-        delete window[cb];
-        // Auto-retry once on timeout (GAS cold start can take 20s)
-        if (retries < 1) {
-          setTimeout(function () {_gas(fn, args, onOk, onErr, 1);}, 1000);
-          return;
+      var isRead = /^(get|validate)/.test(fn) || fn === 'serverUptime';
+      var ctl = ('AbortController' in window) ? new AbortController() : null;
+      var tm = setTimeout(function () {if (ctl) ctl.abort();}, timeout || 55000);
+      var fail = function (msg) {
+        if (isRead && !tryNo) {return setTimeout(function () {_rpc(fn, args, timeout, onOk, onErr, 1);}, 800);}
+        if (onErr) onErr({message: msg});
+        else _toast(msg, 'err');
+      };
+      fetch('/api/rpc', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (_TOKEN || '')},
+        body: JSON.stringify({fn: fn, args: (args || []).concat([_U])}),
+        signal: ctl ? ctl.signal : undefined
+      }).then(function (r) {return r.json();}).then(function (data) {
+        clearTimeout(tm); _lbHide();
+        if (data && data.error === 'NOT_AUTHENTICATED') {
+          try {localStorage.removeItem('joolry_session_v1');} catch (e) { }
+          location.reload(); return;
         }
-        if (onErr) onErr({message: 'Network error. Check connection.'});
-        else {
-          _toast('<i class="fas fa-wifi-slash"></i> Connection error — tap to retry', 'err', function () {_gas(fn, args, onOk, onErr, 0);});
-        }
-      }, 25000);
-
-      window[cb] = function (data) {
-        if (done) return;
-        done = true; _lbHide();
-        clearTimeout(timer);
-        script.remove();
-        delete window[cb];
         if (data && data.success === false && data.error) {
-          if (onErr) onErr({message: data.error});
-          else _toast('Error: ' + data.error, 'err');
-        } else {
-          if (onOk) onOk(data);
-        }
-      };
-
-      script.onerror = function () {
-        if (done) return;
-        done = true;
-        clearTimeout(timer);
-        script.remove();
-        delete window[cb];
-        if (onErr) onErr({message: 'Network error. Check connection.'});
-        else _toast('Network error. Check connection.', 'err');
-      };
-
-      script.src = url;
-      document.head.appendChild(script);
+          if (onErr) onErr({message: data.error}); else _toast('Error: ' + data.error, 'err');
+        } else if (onOk) onOk(data);
+      }).catch(function () {
+        clearTimeout(tm); _lbHide();
+        fail(isRead ? 'Network error. Check connection.' : 'Network error. Pehle check kar lo ki entry save hui ya nahi (Refresh), phir dobara karo.');
+      });
     }
-
-
-
-    // Custom timeout wala _gas
-    function _gasX(fn, args, timeout, onOk, onErr) {
-      _lbShow();
-      var sendArgs = (args || []).concat([_U]);
-      var cb = '_cb' + Date.now() + Math.floor(Math.random() * 9999);
-      var payload = encodeURIComponent(JSON.stringify({action: fn, args: sendArgs}));
-      var url = GAS_URL + '?callback=' + cb + '&payload=' + payload;
-
-      var done = false;
-      var script = document.createElement('script');
-
-      var timer = setTimeout(function () {
-        if (done) return;
-        done = true;
-        _lbHide();
-        script.remove();
-        delete window[cb];
-        if (onErr) onErr({message: 'Request timeout after ' + (timeout / 1000) + 's'});
-      }, timeout || 15000); // ← custom timeout
-
-      window[cb] = function (data) {
-        if (done) return;
-        done = true;
-        _lbHide();
-        clearTimeout(timer);
-        script.remove();
-        delete window[cb];
-        if (data && data.success === false && data.error) {
-          if (onErr) onErr({message: data.error});
-        } else {
-          if (onOk) onOk(data);
-        }
-      };
-
-      script.onerror = function () {
-        if (done) return;
-        done = true;
-        _lbHide();
-        clearTimeout(timer);
-        script.remove();
-        delete window[cb];
-        if (onErr) onErr({message: 'Network error'});
-      };
-
-      script.src = url;
-      document.head.appendChild(script);
-    }
+    function _gas(fn, args, onOk, onErr) {_rpc(fn, args, 55000, onOk, onErr, 0);}
+    // Custom timeout version
+    function _gasX(fn, args, timeout, onOk, onErr) {_rpc(fn, args, timeout || 15000, onOk, onErr, 1);}
 
     /* ══════════════════════════════════════════════════════════
        CSV EXPORT
@@ -14896,11 +14827,7 @@
       btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Signing in...';
       btn.style.opacity = '.65'; btn.style.pointerEvents = 'none';
 
-      fetch(GAS_URL, {
-        method: 'POST',
-        body: JSON.stringify({action: 'processLogin', args: [email, pass], token: ''}),
-        headers: {'Content-Type': 'text/plain'}
-      })
+      fetch('/api/rpc', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({fn: 'processLogin', args: [email, pass]})})
         .then(function (r) {return r.json();})
         .then(function (r) {
           btn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Sign In';
@@ -14920,7 +14847,7 @@
                 else sbAva.innerHTML = ini;
               }
             } catch (e2) { }
-            _TOKEN = r.user.email + ':' + (r.user.role || 'STAFF').toLowerCase();
+            _TOKEN = r.token || '';
             // Save session so page refresh doesn't log out
             _saveSession(_U, _TOKEN);
             _bootApp();
@@ -24881,17 +24808,13 @@
 
       if (btnEl) {btnEl.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Signing in…'; btnEl.disabled = true;}
 
-      fetch(GAS_URL, {
-        method: 'POST',
-        body: JSON.stringify({action: 'processLogin', args: [email, pw], token: ''}),
-        headers: {'Content-Type': 'text/plain'}
-      })
+      fetch('/api/rpc', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({fn: 'processLogin', args: [email, pw]})})
         .then(function (r) {return r.json();})
         .then(function (res) {
           if (btnEl) {btnEl.innerHTML = '<i class="fas fa-arrow-right-to-bracket"></i> Sign In'; btnEl.disabled = false;}
           if (res && res.success && res.user) {
             _U = res.user;
-            _TOKEN = res.user.email + ':' + (res.user.role || 'STAFF').toLowerCase();
+            _TOKEN = res.token || '';
             _bootApp(res.user);
           } else {
             if (errEl) {errEl.textContent = (res && res.error) || 'Login failed.'; errEl.classList.add('on');}
