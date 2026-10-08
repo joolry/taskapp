@@ -1,7 +1,7 @@
 // Joolry Daily — Service Worker v17 (speed build)
 // App shell: stale-while-revalidate (instant open, refreshes in background).
 // /api/* and script.google.com: never cached. BUMP `CACHE` ON EVERY DEPLOY.
-const CACHE = 'joolry-v18-20261008';
+const CACHE = 'joolry-v19-20261008';
 const SHELL = ['./', './index.html', './app.js', './appconfig.js', './app.css', './core.js', './manifest.json'];
 const CDN = ['cdnjs.cloudflare.com', 'cdn.jsdelivr.net', 'fonts.googleapis.com', 'fonts.gstatic.com'];
 
