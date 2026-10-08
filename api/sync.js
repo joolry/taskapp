@@ -1,6 +1,5 @@
-// GET/POST /api/sync?secret=SYNC_SECRET&bump=1
-// Rebuilds global Firestore snapshot from GAS getSnapshot (Fresko-style).
-// Also supports bump-only (invalidates per-fn cache version).
+// GET/POST /api/sync?secret=SYNC_SECRET&full=1
+// &force=1 → clear stuck lock then rebuild (use when queued forever)
 const cache = require('./_cache');
 const { runSync, store } = require('./_lib');
 
@@ -13,8 +12,20 @@ module.exports = async (req, res) => {
     return res.status(401).json({ success: false, error: 'Unauthorized' });
   }
   try {
-    const doBump = req.query && (req.query.bump === '1' || req.query.bump === 'true');
-    const doFull = !doBump || req.query.full === '1' || req.method === 'POST';
+    const q = req.query || {};
+    const force = q.force === '1' || q.force === 'true';
+    const doBump = q.bump === '1' || q.bump === 'true';
+    const doFull = !doBump || q.full === '1' || req.method === 'POST' || force;
+
+    if (force) {
+      // Clear stuck lock so runSync can acquire
+      await store.metaRef('sync').set({
+        syncing: false,
+        dirty: true,
+        syncStartedAt: 0,
+        lastError: 'force unlock'
+      }, { merge: true });
+    }
 
     if (doBump) {
       await cache.bump();
@@ -30,6 +41,7 @@ module.exports = async (req, res) => {
       success: true,
       on: cache.enabled(),
       ver: cache.enabled() ? await cache.ver(true) : null,
+      forced: !!force,
       sync: result
     });
   } catch (e) {
