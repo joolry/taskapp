@@ -205,6 +205,372 @@ async function rebuildAfterWrite() {
   }
 }
 
+
+/** Instant patch SNAP after write — no GAS getSnapshot wait */
+async function patchSnap(mutator) {
+  try {
+    const m = await store.getMeta();
+    if (!m) return false;
+    const snap = await store.loadSnapshot(m);
+    const ok = mutator(snap);
+    if (!ok) return false;
+    snap.builtAt = new Date().toISOString();
+    await store.saveSnapshot(snap);
+    return true;
+  } catch (e) {
+    console.error('patchSnap', e.message);
+    return false;
+  }
+}
+
+function applyWritePatch(fn, clientArgs, gasResult, email) {
+  return patchSnap((snap) => {
+    if (!snap.delegations) snap.delegations = [];
+    if (!snap.checklistToday) snap.checklistToday = [];
+    if (!snap.attendance) snap.attendance = [];
+    if (!snap.leaveRequests) snap.leaveRequests = [];
+    if (!snap.regRequests) snap.regRequests = [];
+    if (!snap.taskList) snap.taskList = [];
+
+    const today = snap.today || new Date(Date.now() + 19800000).toISOString().slice(0, 10);
+    const em = String(email || '').toLowerCase();
+    const me = (snap.doers || []).find(d => String(d.email || '').toLowerCase() === em);
+    const myCode = me ? String(me.emp_id || '') : '';
+    const myName = me ? String(me.name || '') : '';
+    const myDept = me ? String(me.department || '') : '';
+    const nowTs = new Date().toISOString().slice(0, 19).replace('T', ' ');
+
+    function findDel(taskId) {
+      return snap.delegations.find(d => String(d.taskId) === String(taskId));
+    }
+    function patchDel(taskId, fields) {
+      let hit = false;
+      snap.delegations.forEach(d => {
+        if (String(d.taskId) === String(taskId)) {
+          Object.assign(d, fields);
+          hit = true;
+        }
+      });
+      return hit;
+    }
+
+    // ═══════════════ DELEGATION ═══════════════
+    if (fn === 'createDelegation' && gasResult && (gasResult.success !== false) && gasResult.task_id) {
+      const o = clientArgs[0] || {};
+      snap.delegations.unshift({
+        taskId: String(gasResult.task_id),
+        task: String(o.task_desc || o.task || ''),
+        status: 'Pending',
+        delegatedBy: myCode,
+        delegatedTo: String(o.delegated_to || ''),
+        firstDate: String(o.first_date || ''),
+        finalDate: String(o.first_date || o.final_date || ''),
+        priority: String(o.priority || 'Normal'),
+        remark: '',
+        timestamp: nowTs
+      });
+      return true;
+    }
+
+    if (fn === 'managerCompleteDelegation') {
+      return patchDel(clientArgs[0], {
+        status: 'Completed',
+        remark: String(clientArgs[1] || '')
+      });
+    }
+
+    if (fn === 'updateDelegationStatus') {
+      return patchDel(clientArgs[0], {
+        status: String(clientArgs[1] || 'Completed'),
+        remark: String(clientArgs[2] || '')
+      });
+    }
+
+    if (fn === 'managerShiftDelegation') {
+      const fields = { status: 'Shifted' };
+      if (clientArgs[1]) fields.finalDate = String(clientArgs[1]);
+      if (clientArgs[2]) fields.remark = String(clientArgs[2]);
+      return patchDel(clientArgs[0], fields);
+    }
+
+    if (fn === 'requestDateRevision') {
+      // staff asks new date — often stays Pending/Shifted with new finalDate pending approval
+      const fields = {};
+      if (clientArgs[1]) fields.finalDate = String(clientArgs[1]);
+      if (clientArgs[1]) fields.status = 'Shifted';
+      return patchDel(clientArgs[0], fields);
+    }
+
+    // ═══════════════ CHECKLIST ═══════════════
+    if (fn === 'markTaskDone') {
+      // args: rowNum, occ, taskUid, taskName, taskPlanned, date, remarks
+      const rowNum = clientArgs[0];
+      const taskUid = String(clientArgs[2] || '');
+      const taskName = String(clientArgs[3] || '');
+      const planned = String(clientArgs[4] || clientArgs[5] || '');
+      let hit = false;
+      snap.checklistToday.forEach(t => {
+        const byUid = taskUid && String(t.taskId || t.uid || '') === taskUid;
+        const byRow = taskName && String(t.task || '') === taskName && String(t.rowNum) === String(rowNum);
+        if (byUid || byRow) {
+          t.status = 'Done';
+          t.actual = planned || today;
+          hit = true;
+        }
+      });
+      return hit;
+    }
+
+    if (fn === 'markTeamTaskDone') {
+      // args: rowNum, occ, taskName, empId, date, remarks
+      const rowNum = clientArgs[0];
+      const taskName = String(clientArgs[2] || '');
+      const empId = String(clientArgs[3] || '');
+      let hit = false;
+      snap.checklistToday.forEach(t => {
+        const matchName = !taskName || String(t.task || '') === taskName;
+        const matchEmp = !empId || String(t.nameId || '') === empId;
+        const matchRow = rowNum == null || String(t.rowNum) === String(rowNum);
+        if (matchName && matchEmp && matchRow) {
+          t.status = 'Done';
+          hit = true;
+        }
+      });
+      return hit;
+    }
+
+    if (fn === 'transferChecklistTask') {
+      // args: rowNum, occ, taskUid, taskName, taskPlanned, fromEmpId, toEmpId, reason
+      const taskUid = String(clientArgs[2] || '');
+      const taskName = String(clientArgs[3] || '');
+      const fromEmp = String(clientArgs[5] || '');
+      const toEmp = String(clientArgs[6] || '');
+      const reason = String(clientArgs[7] || '');
+      let hit = false;
+      snap.checklistToday.forEach(t => {
+        const byUid = taskUid && String(t.taskId || t.uid || '') === taskUid;
+        const byName = taskName && String(t.task || '') === taskName && String(t.nameId || '') === fromEmp;
+        if (byUid || byName) {
+          t.transferredTo = toEmp;
+          t.transferBy = myCode || fromEmp;
+          t.transferReason = reason;
+          t.transferredAt = nowTs;
+          hit = true;
+        }
+      });
+      return hit;
+    }
+
+    if (fn === 'managerShiftTask') {
+      // args: taskId, empId, fromDate, toDate — update planned date on checklist
+      const taskId = String(clientArgs[0] || '');
+      const empId = String(clientArgs[1] || '');
+      const toDate = String(clientArgs[3] || '');
+      let hit = false;
+      snap.checklistToday.forEach(t => {
+        if (taskId && String(t.taskId || t.uid || '') === taskId) {
+          if (!empId || String(t.nameId || '') === empId) {
+            if (toDate) t.planned = toDate;
+            hit = true;
+          }
+        }
+      });
+      return hit;
+    }
+
+    if (fn === 'saveNewTask' && gasResult && gasResult.success !== false) {
+      const o = clientArgs[0] || {};
+      snap.taskList.unshift({
+        setupId: String((gasResult && (gasResult.setup_id || gasResult.task_id || gasResult.uid)) || ('NEW-' + Date.now())),
+        task: String(o.task_name || o.task || ''),
+        doerId: String(o.doer_id || o.emp_id || ''),
+        doerName: String(o.doer_name || ''),
+        department: String(o.department || ''),
+        frequency: String(o.frequency || o.freq || 'Daily'),
+        weekDay: String(o.week_day || ''),
+        monthDay: String(o.month_day || ''),
+        dayDate: String(o.day_date || o.scheduled_time || ''),
+        status: 'Active',
+        startDate: String(o.start_date || today)
+      });
+      return true;
+    }
+
+    if (fn === 'portalDeleteTask' || fn === 'deactivateTask') {
+      const uid = String(clientArgs[0] || '');
+      const before = snap.taskList.length;
+      snap.taskList = snap.taskList.filter(t => String(t.setupId || '') !== uid);
+      snap.checklistToday.forEach(t => {
+        if (String(t.taskId || t.uid || '') === uid) t.status = 'Inactive';
+      });
+      return snap.taskList.length !== before || true;
+    }
+
+    // ═══════════════ ATTENDANCE ═══════════════
+    if (fn === 'recordCheckIn') {
+      const existing = snap.attendance.find(a => String(a.emp_id) === myCode && String(a.date) === today);
+      const hhmm = nowTs.slice(11, 16);
+      if (existing) {
+        existing.check_in = hhmm;
+        existing.status = existing.status || 'Present';
+      } else {
+        snap.attendance.push({
+          att_id: 'CI-' + Date.now(),
+          emp_id: myCode,
+          emp_name: myName,
+          dept: myDept,
+          date: today,
+          day: '',
+          check_in: hhmm,
+          check_out: '',
+          total_hours: '',
+          status: 'Present',
+          check_in_device_ts: String(clientArgs[0] || nowTs),
+          check_out_device_ts: ''
+        });
+      }
+      return !!myCode;
+    }
+
+    if (fn === 'recordCheckOut') {
+      const existing = snap.attendance.find(a => String(a.emp_id) === myCode && String(a.date) === today);
+      const hhmm = nowTs.slice(11, 16);
+      if (existing) {
+        existing.check_out = hhmm;
+        return true;
+      }
+      if (myCode) {
+        snap.attendance.push({
+          att_id: 'CO-' + Date.now(),
+          emp_id: myCode,
+          emp_name: myName,
+          dept: myDept,
+          date: today,
+          check_in: '',
+          check_out: hhmm,
+          total_hours: '',
+          status: 'Present',
+          check_in_device_ts: '',
+          check_out_device_ts: String(clientArgs[0] || nowTs)
+        });
+        return true;
+      }
+      return false;
+    }
+
+    if (fn === 'markStaffAttendance') {
+      // args: records[] = [{ emp_id, status, check_in, check_out, ... }]
+      const records = Array.isArray(clientArgs[0]) ? clientArgs[0] : [];
+      let hit = false;
+      records.forEach(rec => {
+        const eid = String(rec.emp_id || '');
+        const dt = String(rec.date || today);
+        if (!eid) return;
+        let row = snap.attendance.find(a => String(a.emp_id) === eid && String(a.date) === dt);
+        if (!row) {
+          row = { att_id: 'MS-' + Date.now() + '-' + eid, emp_id: eid, emp_name: String(rec.emp_name || ''), dept: String(rec.dept || ''), date: dt, check_in: '', check_out: '', total_hours: '', status: '' };
+          snap.attendance.push(row);
+        }
+        if (rec.status != null) row.status = String(rec.status);
+        if (rec.check_in != null) row.check_in = String(rec.check_in);
+        if (rec.check_out != null) row.check_out = String(rec.check_out);
+        hit = true;
+      });
+      return hit;
+    }
+
+    // ═══════════════ LEAVE ═══════════════
+    if (fn === 'requestLeave') {
+      const o = clientArgs[0] || {};
+      const rid = String((gasResult && (gasResult.request_id || gasResult.id)) || ('LV-' + Date.now()));
+      snap.leaveRequests.unshift({
+        request_id: rid,
+        emp_id: myCode,
+        emp_name: myName,
+        dept: myDept,
+        leave_type: String(o.leave_type || o.type || ''),
+        from_date: String(o.from_date || ''),
+        to_date: String(o.to_date || ''),
+        num_days: String(o.num_days || o.days || ''),
+        reason: String(o.reason || ''),
+        status: 'Pending',
+        requested_at: nowTs,
+        reviewed_by: '',
+        reviewed_at: '',
+        remark: ''
+      });
+      return true;
+    }
+
+    if (fn === 'approveLeaveRequest' || fn === 'updateLeaveStatus') {
+      const rid = String(clientArgs[0] || '');
+      const st = String(clientArgs[1] || 'Approved');
+      const remark = String(clientArgs[2] || '');
+      let hit = false;
+      snap.leaveRequests.forEach(r => {
+        if (String(r.request_id) === rid) {
+          r.status = st;
+          if (remark) r.remark = remark;
+          r.reviewed_by = myName || myCode;
+          r.reviewed_at = nowTs;
+          hit = true;
+        }
+      });
+      return hit;
+    }
+
+    if (fn === 'cancelLeaveRequest') {
+      const rid = String(clientArgs[0] || '');
+      let hit = false;
+      snap.leaveRequests.forEach(r => {
+        if (String(r.request_id) === rid) {
+          r.status = 'Cancelled';
+          hit = true;
+        }
+      });
+      return hit;
+    }
+
+    // ═══════════════ REGULARIZATION ═══════════════
+    if (fn === 'requestRegularization') {
+      const o = clientArgs[0] || {};
+      const rid = String((gasResult && (gasResult.reg_id || gasResult.id)) || ('RG-' + Date.now()));
+      snap.regRequests.unshift({
+        reg_id: rid,
+        emp_id: myCode,
+        emp_name: myName,
+        dept: myDept,
+        date: String(o.reg_date || o.date || ''),
+        req_in: String(o.expected_in || o.req_in || ''),
+        req_out: String(o.expected_out || o.req_out || ''),
+        reason: String(o.reason || ''),
+        status: 'Pending',
+        remark: '',
+        requested_at: nowTs
+      });
+      return true;
+    }
+
+    if (fn === 'approveRegularization') {
+      const rid = String(clientArgs[0] || '');
+      const st = String(clientArgs[1] || 'Approved');
+      const remark = String(clientArgs[2] || '');
+      let hit = false;
+      snap.regRequests.forEach(r => {
+        if (String(r.reg_id) === rid) {
+          r.status = st;
+          if (remark) r.remark = remark;
+          hit = true;
+        }
+      });
+      return hit;
+    }
+
+    // Unknown write → signal caller to rely on full rebuild only
+    return false;
+  });
+}
+
 async function tryGlobalSnap(fn, args, email, meta) {
   if (!SNAPSHOT_READS.has(fn)) return undefined;
   if (process.env.SNAPSHOT !== 'on') return undefined;
@@ -272,16 +638,27 @@ async function handle(fn, args, token, meta) {
     return cache.wrap(fn, clientArgs, s.email, run, meta);
   }
 
-  // ── WRITES: GAS → rebuild SNAP → then respond (UI refresh gets fresh data)
+  // ── WRITES: GAS → instant SNAP patch → respond; full rebuild in background
   const g = Date.now();
   const r = await callGas(fn, gasArgs, false);
   meta.gasMs = Date.now() - g;
   meta.cache = 'WRITE';
 
-  try { await cache.bump(); } catch (e) {}
-  // Wait for SNAP so next get* from same page load is not stale
-  await rebuildAfterWrite();
-  meta.snapRebuilt = true;
+  // Only patch / rebuild if write looked successful
+  const ok = r && r.success !== false && !r.error;
+  if (ok) {
+    try { await cache.bump(); } catch (e) {}
+    // 1) Instant row-level SNAP patch (all MAIN/MY WORK writes)
+    const patched = await applyWritePatch(fn, clientArgs, r, s.email);
+    meta.snapPatched = !!patched;
+    // 2) Full rebuild: background if patched, await if not (safety net)
+    if (patched) {
+      waitUntil(rebuildAfterWrite().catch(e => console.error('bg rebuild', e.message)));
+    } else {
+      await rebuildAfterWrite();
+      meta.snapRebuilt = true;
+    }
+  }
 
   return r;
 }
