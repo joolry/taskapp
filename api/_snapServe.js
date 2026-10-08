@@ -35,14 +35,46 @@ function isManager(doer) {
   const r = String((doer && doer.role) || '').toUpperCase();
   return r === 'OWNER' || r === 'MANAGER' || r === 'ADMIN';
 }
-function mapDelRow(d) {
+function doerNameMap(snap) {
+  const m = {};
+  (snap.doers || []).forEach(function (d) {
+    if (d.emp_id) m[String(d.emp_id)] = String(d.name || '');
+  });
+  return m;
+}
+function mapDelRow(d, today, nameMap) {
+  today = today || istToday();
+  nameMap = nameMap || {};
+  const by = String(d.delegatedBy || d.delegated_by || '');
+  const to = String(d.delegatedTo || d.delegated_to || '');
+  const due = normDate(d.finalDate || d.final_date || d.firstDate || d.first_date || '');
+  const sts = String(d.status || 'Pending');
+  const tsRaw = String(d.timestamp || '');
+  const assignedAt = tsRaw.substring(0, 19);
+  let completedAt = '';
+  if (sts === 'Completed') completedAt = due;
   return {
-    task_id: String(d.taskId || ''), task: String(d.task || ''),
-    status: String(d.status || ''), delegated_by: String(d.delegatedBy || ''),
-    delegated_to: String(d.delegatedTo || ''),
-    first_date: normDate(d.firstDate || ''), final_date: normDate(d.finalDate || ''),
-    priority: String(d.priority || ''), remark: String(d.remark || ''),
-    timestamp: String(d.timestamp || '')
+    task_id: String(d.taskId || d.task_id || ''),
+    delegated_by: by,
+    delegated_by_name: nameMap[by] || by || '',
+    delegated_to: to,
+    delegated_to_name: nameMap[to] || to || '',
+    task_desc: String(d.task || d.task_desc || ''),
+    task: String(d.task || d.task_desc || ''),
+    first_date: normDate(d.firstDate || d.first_date || ''),
+    final_date: due,
+    revision_1: '',
+    revision_2: '',
+    status: sts,
+    photo_url: '',
+    is_overdue: !!(due && sts !== 'Completed' && due < today),
+    timestamp: assignedAt,
+    assigned_at: assignedAt,
+    completed_at: completedAt,
+    completion_remarks: String(d.remark || d.remarks || ''),
+    shift_reason: String(d.remark || ''),
+    remarks: String(d.remark || ''),
+    priority: String(d.priority || '')
   };
 }
 function hoursBetween(ci, co) {
@@ -140,15 +172,21 @@ function buildTodayTasks(snap, doer, dateArg) {
 function buildMyDelegations(snap, doer) {
   const code = empCode(doer);
   if (!code) return [];
-  return (snap.delegations || []).filter(d => String(d.delegatedTo || '') === code).map(mapDelRow);
+  const today = snap.today || istToday();
+  const names = doerNameMap(snap);
+  return (snap.delegations || []).filter(d => String(d.delegatedTo || '') === code).map(d => mapDelRow(d, today, names));
 }
 function buildMyDelegatedOut(snap, doer) {
   const code = empCode(doer);
   if (!code) return [];
-  return (snap.delegations || []).filter(d => String(d.delegatedBy || '') === code).map(mapDelRow);
+  const today = snap.today || istToday();
+  const names = doerNameMap(snap);
+  return (snap.delegations || []).filter(d => String(d.delegatedBy || '') === code).map(d => mapDelRow(d, today, names));
 }
 function buildAllDelegations(snap, filters) {
-  let rows = (snap.delegations || []).map(mapDelRow);
+  const today = snap.today || istToday();
+  const names = doerNameMap(snap);
+  let rows = (snap.delegations || []).map(d => mapDelRow(d, today, names));
   if (filters && typeof filters === 'object') {
     if (filters.from_date) rows = rows.filter(d => !d.final_date || d.final_date >= filters.from_date);
     if (filters.to_date) rows = rows.filter(d => !d.first_date || d.first_date <= filters.to_date);
