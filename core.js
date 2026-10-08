@@ -1134,13 +1134,10 @@
     ══════════════════════════════════════════════════════════ */
     var _navRoutes = [
       {title: 'Dashboard', route: 'dash', ico: 'fa-chart-pie', meta: 'Home overview', cat: 'Navigation', mgr: false},
-      {title: 'Activity Feed', route: 'feed', ico: 'fa-bolt', meta: 'Recent activity', cat: 'Navigation', mgr: false},
       {title: 'Announcements', route: 'ann', ico: 'fa-bullhorn', meta: 'Company news & updates', cat: 'Navigation', mgr: false},
       {title: 'Checklist', route: 'check', ico: 'fa-list-check', meta: 'Daily task management', cat: 'Navigation', mgr: false},
       {title: 'Delegation', route: 'deleg', ico: 'fa-people-arrows', meta: 'Task assignments', cat: 'Navigation', mgr: false},
-      {title: 'Attendance & Leave', route: 'attend', ico: 'fa-calendar-check', meta: 'Punch records & leave', cat: 'Navigation', mgr: false},
-      {title: 'Leave Management', route: 'leave', ico: 'fa-umbrella-beach', meta: 'Request leave, balance, approvals', cat: 'Navigation', mgr: false},
-      {title: 'Holiday Calendar', route: 'holcal', ico: 'fa-calendar-days', meta: 'Company holidays', cat: 'Navigation', mgr: false},
+      {title: 'Attendance', route: 'attend', ico: 'fa-calendar-check', meta: 'Punch records & team attendance', cat: 'Navigation', mgr: false},
       {title: 'My Profile', route: 'profile', ico: 'fa-circle-user', meta: 'Profile & password', cat: 'Navigation', mgr: false},
       {title: 'EM Dashboard', route: 'em', ico: 'fa-table-cells-large', meta: 'Checklist + Delegation + Attendance — all doers in one view', cat: 'Manager', mgr: true},
       {title: 'Employee Directory', route: 'empdir', ico: 'fa-address-book', meta: 'Team member profiles', cat: 'Manager', mgr: true},
@@ -1726,8 +1723,9 @@
         check: _vCheck,
         deleg: _vDeleg,
         attend: _vAttend,
-        leave: _vLeave,
-        holcal: _vHolCal,
+        leave: function(){ _loadV('attend'); },
+        holcal: function(){ _loadV('dash'); },
+        feed: function(){ _loadV('dash'); },
         profile: _vProfile,
         em: _vEM,
         empdir: _vEmpDir,
@@ -2480,9 +2478,6 @@
               {ico: 'fa-list-check', lbl: 'Tasks', view: 'check', c1: '#0F766E', c2: '#14B8A6', all: true},
               {ico: 'fa-diagram-project', lbl: 'Delegate', view: 'deleg', c1: '#7C3AED', c2: '#A78BFA', all: true},
               {ico: 'fa-user-clock', lbl: 'Attend', view: 'attend', c1: '#1D4ED8', c2: '#60A5FA', all: true},
-              {ico: 'fa-umbrella-beach', lbl: 'Leave', view: 'leave', c1: '#DC2626', c2: '#F87171', all: true},
-              {ico: 'fa-calendar-days', lbl: 'Holidays', view: 'holcal', c1: '#065F46', c2: '#34D399', all: true},
-              {ico: 'fa-bolt', lbl: 'Activity', view: 'feed', c1: '#EA580C', c2: '#FB923C', all: true},
               {ico: 'fa-user', lbl: 'Profile', view: 'profile', c1: '#475569', c2: '#94A3B8', all: true},
               {ico: 'fa-bullhorn', lbl: 'Announce', view: 'ann', c1: '#D97706', c2: '#FCD34D', all: true},
               {ico: 'fa-chart-line', lbl: 'Analytics', view: 'clana', c1: '#9D174D', c2: '#F472B6', mgr: true},
@@ -4725,7 +4720,7 @@
       document.getElementById('content').innerHTML =
         '<div class="mod-head">' +
         '<div><div class="mod-title">Attendance & Leave</div>' +
-        '<div class="mod-sub">Punch records, leave requests & muster reports</div></div></div>' +
+        '<div class="mod-sub">Punch records, regularization & team attendance (incl. Week Off / PTO)</div></div></div>' +
         _mkTabs(tabs, at) + _mkPanes(tabs, at, panes);
 
       if (at === 'amy' && needsAtt) _loadMyAtt();
@@ -5150,7 +5145,7 @@
           var initials = (r.name || '?').split(' ').map(function (w) {return w[0] || '';}).slice(0, 2).join('').toUpperCase();
           var stBg = r.status === 'P' ? 'var(--Gl)' : r.status === 'HD' ? 'var(--Ol)' : r.status === 'A' ? 'var(--Rl)' : 'var(--sur2)';
           var stFc = r.status === 'P' ? 'var(--G)' : r.status === 'HD' ? 'var(--O)' : r.status === 'A' ? 'var(--R)' : 'var(--tx3)';
-          var stLbl = r.status === 'P' ? 'Present' : r.status === 'HD' ? 'Half Day' : r.status === 'A' ? 'Absent' : '—';
+          var stLbl = r.status === 'P' || r.status === 'Present' ? 'Present' : r.status === 'HD' || r.status === 'Half Day' ? 'Half Day' : r.status === 'A' || r.status === 'Absent' ? 'Absent' : r.status === 'WO' || r.status === 'Week Off' ? 'Week Off' : r.status === 'PTO' ? 'PTO' : (r.status || '—');
           var rowBg = ri % 2 === 0 ? 'var(--bg)' : 'var(--sur2)';
 
           return '<div style="display:flex;align-items:center;gap:12px;padding:10px 16px;background:' + rowBg + ';border-top:' + (ri > 0 ? '1px solid var(--bdr)' : 'none') + ';transition:background .1s" onmouseover="this.style.background=\'var(--Pl)\'" onmouseout="this.style.background=\'' + rowBg + '\'">' +
@@ -5175,13 +5170,17 @@
               '<input type="hidden" id="ti_' + r.emp_id + '" value="' + _esc(r.check_in || '') + '">' +
               '<input type="time" id="to_' + r.emp_id + '" value="' + curTime + '" class="tam-time" style="padding:5px 8px;border-radius:8px;border:1.5px solid var(--bdr);background:var(--bg);font-size:12px;color:var(--tx);min-width:100px">' +
               '<select id="st_' + r.emp_id + '" class="tam-sel" style="padding:5px 8px;border-radius:8px;border:1.5px solid var(--bdr);background:var(--bg);font-size:12px;color:var(--tx)">' +
-              '<option value="P"' + (r.status === 'P' ? ' selected' : '') + '>Present</option><option value="HD"' + (r.status === 'HD' ? ' selected' : '') + '>Half Day</option><option value="A">Absent</option>' +
+              '<option value="P"' + (r.status === 'P' || r.status === 'Present' ? ' selected' : '') + '>Present</option>' +
+              '<option value="HD"' + (r.status === 'HD' || r.status === 'Half Day' ? ' selected' : '') + '>Half Day</option>' +
+              '<option value="A"' + (r.status === 'A' || r.status === 'Absent' ? ' selected' : '') + '>Absent</option>' +
+              '<option value="WO"' + (r.status === 'WO' || r.status === 'Week Off' ? ' selected' : '') + '>Week Off</option>' +
+              '<option value="PTO"' + (r.status === 'PTO' ? ' selected' : '') + '>PTO</option>' +
               '</select>' +
               '<button id="mb_' + r.emp_id + '" class="tam-btn" onclick="_tamMark1(\'' + _esc(r.emp_id) + '\',\'' + _esc(r.name) + '\',\'' + _esc(d) + '\')" style="padding:6px 14px;border-radius:8px;background:#d97706;color:#fff;font-size:12px;font-weight:800;border:none;cursor:pointer;white-space:nowrap"><i class="fas fa-sign-out-alt"></i> Mark OUT</button>'
               : '<input type="time" id="ti_' + r.emp_id + '" value="' + curTime + '" class="tam-time" style="padding:5px 8px;border-radius:8px;border:1.5px solid var(--bdr);background:var(--bg);font-size:12px;color:var(--tx);min-width:100px" title="Check-in">' +
               '<input type="time" id="to_' + r.emp_id + '" class="tam-time" style="padding:5px 8px;border-radius:8px;border:1.5px solid var(--bdr);background:var(--bg);font-size:12px;color:var(--tx);min-width:100px" title="Check-out">' +
               '<select id="st_' + r.emp_id + '" class="tam-sel" style="padding:5px 8px;border-radius:8px;border:1.5px solid var(--bdr);background:var(--bg);font-size:12px;color:var(--tx)">' +
-              '<option value="P">Present</option><option value="HD">Half Day</option><option value="A">Absent</option>' +
+              '<option value="P">Present</option><option value="HD">Half Day</option><option value="A">Absent</option><option value="WO">Week Off</option><option value="PTO">PTO</option>' +
               '</select>' +
               '<button id="mb_' + r.emp_id + '" class="tam-btn" onclick="_tamMark1(\'' + _esc(r.emp_id) + '\',\'' + _esc(r.name) + '\',\'' + _esc(d) + '\')" style="padding:6px 14px;border-radius:8px;background:var(--G);color:#fff;font-size:12px;font-weight:800;border:none;cursor:pointer;white-space:nowrap"><i class="fas fa-check"></i> Mark</button>'
             ) +
@@ -5265,9 +5264,9 @@
         emp_id: empId, emp_name: empName, dept: dept,
         date: _teamAttDate, check_in: inT, check_out: outT, status: st
       }]], function (res) {
-        _toast('✓ ' + empName + (outT ? ' OUT saved' : ' marked ' + (st === 'P' ? 'Present' : st === 'HD' ? 'Half Day' : 'Absent')), 'ok');
-        // Reload from server so UI matches sheet (no false local-only update)
-        _tamReload();
+        _toast('✓ ' + empName + (outT ? ' OUT saved' : ' marked ' + ({P:'Present',HD:'Half Day',A:'Absent',WO:'Week Off',PTO:'PTO'}[st] || st)), 'ok');
+        // Brief wait so server SNAP patch commits before reload
+        setTimeout(function () { _tamReload(); }, 350);
       }, function (e) {
         _toast(e.message || 'Mark failed', 'err');
         if (btn) {
@@ -6579,7 +6578,7 @@
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {e.preventDefault(); _openGS(); return;}
       // Alt+Number shortcuts for quick navigation
       if (e.altKey && !e.ctrlKey && !e.metaKey) {
-        var numMap = {'1': 'dash', '2': 'check', '3': 'deleg', '4': 'attend', '5': 'holcal', '6': 'profile', '7': 'em', '9': 'empdir'};
+        var numMap = {'1': 'dash', '2': 'check', '3': 'deleg', '4': 'attend', '5': 'profile', '6': 'profile', '7': 'em', '9': 'empdir'};
         if (numMap[e.key]) {e.preventDefault(); _loadV(numMap[e.key]);}
       }
       // ? → Show keyboard shortcuts help
@@ -14980,7 +14979,7 @@
     }
     function _vib(ms) {try {if (navigator.vibrate) navigator.vibrate(ms || 12);} catch (e) { } }
     function _updateMobNav(activeKey) {
-      var keyMap = {dash: 'home', check: 'check', attend: 'attend', leave: 'leave', deleg: 'deleg', profile: 'profile'};
+      var keyMap = {dash: 'home', check: 'check', attend: 'attend', leave: 'attend', deleg: 'deleg', profile: 'profile', feed: 'home', holcal: 'home'};
       var mapped = keyMap[activeKey] || activeKey;
       document.querySelectorAll('.mob-nav-item').forEach(function (el) {
         el.classList.remove('active');
@@ -14998,10 +14997,9 @@
       if (_moreOpen) {_closeMobTray(); return;}
       _moreOpen = true;
       var items = [
-        {ico: 'fa-bolt', lbl: 'Activity', key: 'feed'},
         {ico: 'fa-bullhorn', lbl: 'Announce', key: 'ann'},
         {ico: 'fa-people-arrows', lbl: 'Delegation', key: 'deleg'},
-        {ico: 'fa-calendar-days', lbl: 'Holidays', key: 'holcal'},
+        {ico: 'fa-calendar-check', lbl: 'Attendance', key: 'attend'},
         {ico: 'fa-circle-user', lbl: 'Profile', key: 'profile'},
       ];
       if (_isManager && _isManager()) {
