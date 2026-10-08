@@ -1,1 +1,12 @@
-{ "name": "taskapp", "version": "1.0.0", "private": true, "engines": { "node": ">=20" } }
+{
+  "name": "taskapp",
+  "version": "1.0.0",
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.7.0",
+    "@vercel/functions": "^1.5.0"
+  }
+}
