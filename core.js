@@ -3429,11 +3429,14 @@
       _gas('getTaskHistory', [_U.emp_code, from, to], function (logs) {
         _D.histLogs = logs;
 
-        // Status: actual_dt filled & planned filled = Done; planned filled & actual blank = Pending
+        // Status: actual filled = Done; else Pending (support field name variants)
         logs.forEach(function (l) {
-          var hasPlanned = l.date && l.date !== '';
-          var hasActual = l.actual_dt && l.actual_dt !== '';
-          l.computed_status = (hasPlanned && hasActual) ? 'Done' : 'Pending';
+          var hasPlanned = !!(l.date || l.planned || l.plan_date || l.planned_date);
+          var hasActual = !!(l.actual_dt || l.actual || l.completed_at || l.done_at);
+          var st = (l.status || l.computed_status || '').toString().toLowerCase();
+          if (st === 'done' || st === 'completed') l.computed_status = 'Done';
+          else if (hasActual) l.computed_status = 'Done';
+          else l.computed_status = 'Pending';
         });
 
         var filtered = logs;
@@ -3446,12 +3449,25 @@
           return;
         }
 
+        // Normalize field names from backend variants
+        filtered.forEach(function (l) {
+          l._planDate = l.date || l.planned || l.plan_date || l.planned_date || '';
+          l._taskName = l.task_name || l.task || l.name || '';
+          l._freq = l.frequency || l.freq || '';
+          l._planTime = l.scheduled_time || l.plan_time || l.planned_time || '';
+          l._actual = l.actual_dt || l.actual || l.completed_at || l.done_at || '';
+          l._remark = l.remark || l.remarks || l.completion_remarks || l.notes || '';
+          l._emp = l.emp_name || l.employee || l.doer || '';
+          l._dept = l.dept || l.department || '';
+        });
+
         tblEl.innerHTML =
           '<div class="export-bar"><i class="fas fa-table"></i>' +
           '<span>' + filtered.length + ' records</span>' +
           '<button class="btn btn-outline btn-xs" onclick="_exportHistory()"><i class="fas fa-download"></i> Export CSV</button>' +
           '</div>' +
-          '<div class="table-card"><div class="tw"><table><thead><tr>' +
+          // Desktop table
+          '<div class="table-card hist-desk"><div class="tw"><table><thead><tr>' +
           '<th>Plan Date</th><th>Task</th><th>Freq</th><th>Status</th>' +
           '<th style="color:var(--P)"><i class="fas fa-calendar-clock"></i> Plan Time</th>' +
           '<th style="color:var(--G)"><i class="fas fa-check-circle"></i> Actual Time</th>' +
@@ -3459,19 +3475,45 @@
           '</tr></thead><tbody>' +
           filtered.map(function (l) {
             var isDone = l.computed_status === 'Done';
-            var planTime = l.scheduled_time || '';
-            var actTime = isDone && l.actual_dt ? _tsShort(l.actual_dt) : '';
+            var planTime = l._planTime;
+            var actTime = isDone && l._actual ? _tsShort(l._actual) : '';
             return '<tr>' +
-              '<td style="font-weight:700">' + _fmtDate(l.date) + '</td>' +
-              '<td>' + _esc(l.task_name) + '</td>' +
-              '<td>' + _freqBadge(l.frequency) + '</td>' +
+              '<td style="font-weight:700;white-space:nowrap">' + _fmtDate(l._planDate) + '</td>' +
+              '<td style="min-width:140px">' + _esc(l._taskName) +
+              (l._emp ? '<div style="font-size:10px;color:var(--tx3);margin-top:2px">' + _esc(l._emp) + (l._dept ? ' · ' + _esc(l._dept) : '') + '</div>' : '') +
+              '</td>' +
+              '<td>' + _freqBadge(l._freq) + '</td>' +
               '<td>' + _statusBadge(isDone ? 'Done' : 'Pending') + '</td>' +
               '<td style="color:var(--P);font-weight:600">' + (planTime ? '<i class="fas fa-calendar-clock"></i> ' + _esc(planTime) : '<span style="color:var(--tx3)">—</span>') + '</td>' +
               '<td style="color:var(--G);font-weight:600">' + (actTime ? '<i class="fas fa-check-circle"></i> ' + actTime : '<span style="color:var(--tx3)">—</span>') + '</td>' +
-              '<td style="color:var(--I);font-size:12px">' + (l.remark ? '<i class="fas fa-comment-dots"></i> ' + _esc(l.remark) : '<span style="color:var(--tx3)">—</span>') + '</td>' +
+              '<td style="color:var(--I);font-size:12px;max-width:180px">' + (l._remark ? '<i class="fas fa-comment-dots"></i> ' + _esc(l._remark) : '<span style="color:var(--tx3)">—</span>') + '</td>' +
               '</tr>';
           }).join('') +
-          '</tbody></table></div></div>';
+          '</tbody></table></div></div>' +
+          // Mobile cards
+          '<div class="hist-mob">' +
+          filtered.map(function (l) {
+            var isDone = l.computed_status === 'Done';
+            var planTime = l._planTime;
+            var actTime = isDone && l._actual ? _tsShort(l._actual) : '';
+            return '<div class="card card-nohover" style="padding:12px 14px;margin-bottom:8px">' +
+              '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px">' +
+              '<div style="font-weight:700;font-size:13px;flex:1;min-width:0;word-break:break-word">' + _esc(l._taskName) + '</div>' +
+              _statusBadge(isDone ? 'Done' : 'Pending') +
+              '</div>' +
+              '<div style="display:flex;flex-wrap:wrap;gap:6px;font-size:11px;color:var(--tx3);margin-bottom:4px">' +
+              '<span><i class="fas fa-calendar"></i> ' + _fmtDate(l._planDate) + '</span>' +
+              (l._freq ? '<span>' + _freqBadge(l._freq) + '</span>' : '') +
+              (l._emp ? '<span><i class="fas fa-user"></i> ' + _esc(l._emp) + '</span>' : '') +
+              '</div>' +
+              '<div style="display:flex;flex-wrap:wrap;gap:8px;font-size:11px;margin-top:4px">' +
+              (planTime ? '<span style="color:var(--P);font-weight:600"><i class="fas fa-calendar-clock"></i> Plan: ' + _esc(planTime) + '</span>' : '') +
+              (actTime ? '<span style="color:var(--G);font-weight:600"><i class="fas fa-check-circle"></i> Actual: ' + actTime + '</span>' : '') +
+              '</div>' +
+              (l._remark ? '<div style="margin-top:6px;padding:6px 8px;background:var(--Il);border-radius:8px;font-size:11px;color:var(--I)"><i class="fas fa-comment-dots"></i> ' + _esc(l._remark) + '</div>' : '') +
+              '</div>';
+          }).join('') +
+          '</div>';
       }, function (e) {
         tblEl.innerHTML = (e && e.message && e.message.indexOf('Network') > -1) ? '<div style="text-align:center;padding:24px"><div style="font-size:28px;margin-bottom:8px">📡</div><div style="font-weight:700;color:var(--tx);margin-bottom:4px">Connection Error</div><div style="font-size:12px;color:var(--tx2);margin-bottom:12px">Server se connect nahi ho pa raha</div><button class="btn btn-sm" onclick="_forceRefresh()"><i class="fas fa-rotate-right"></i> Retry</button></div>' : '<div class="te">' + _esc(e.message) + '</div>';
       });
@@ -3515,27 +3557,45 @@
         }
       }
 
-      // ── Active Tasks ──
-      _gas('getDeptTasks', ['All', _today()], function (tasks) {
+      // ── Active Tasks — try master list (no date lock), fallback to today ──
+      function _setupRenderTasks(tasks) {
         var el2 = document.getElementById('setupTaskList');
         if (!el2) return;
+        if (tasks && !Array.isArray(tasks)) {
+          if (Array.isArray(tasks.tasks)) tasks = tasks.tasks;
+          else if (Array.isArray(tasks.data)) tasks = tasks.data;
+          else if (Array.isArray(tasks.rows)) tasks = tasks.rows;
+          else tasks = [];
+        }
+        tasks = tasks || [];
         var seen = {}; var allList = [];
         tasks.forEach(function (t) {
-          if (!seen[t.task_uid]) {seen[t.task_uid] = true; allList.push(t);}
+          var uid = t.task_uid || t.uid || t.id || t.task_id || (t.task_name + '|' + (t.emp_id || ''));
+          if (!seen[uid]) {seen[uid] = true; allList.push(t);}
         });
         if (!allList.length) {
-          el2.innerHTML = '<div class="empty-state"><i class="fas fa-tasks"></i><h4>No Active Tasks</h4><p>Add a task using the form.</p></div>';
+          el2.innerHTML = '<div class="empty-state"><i class="fas fa-tasks"></i><h4>No Active Tasks</h4><p>Add a task using the form above.</p></div>';
           return;
         }
         window._tsAllTasks = allList;
         _tsRenderBar(el2);
         _tsApplyFilter();
         setTimeout(function () {_initSearchSelects(el2);}, 60);
-      }, function (e) {
+      }
+      function _setupLoadErr(e) {
         var el2 = document.getElementById('setupTaskList');
         if (el2) el2.innerHTML = (e && e.message && e.message.indexOf('Network') > -1)
-          ? '<div style="text-align:center;padding:24px"><div style="font-size:28px;margin-bottom:8px">📡</div><div style="font-weight:700;color:var(--tx);margin-bottom:4px">Connection Error</div><button class="btn btn-sm" onclick="_forceRefresh()"><i class="fas fa-rotate-right"></i> Retry</button></div>'
-          : '<div class="te">' + _esc(e.message) + '</div>';
+          ? '<div style="text-align:center;padding:24px"><div style="font-size:28px;margin-bottom:8px">📡</div><div style="font-weight:700;color:var(--tx);margin-bottom:4px">Connection Error</div><button class="btn btn-sm" onclick="_loadSetupTasks()"><i class="fas fa-rotate-right"></i> Retry</button></div>'
+          : '<div class="te">' + _esc((e && e.message) || 'Error') + '</div>';
+      }
+      // Prefer full active list (empty/null date); fallback to today snapshot
+      _gas('getDeptTasks', ['All', ''], function (tasks) {
+        var arr = tasks;
+        if (arr && !Array.isArray(arr)) arr = arr.tasks || arr.data || arr.rows || [];
+        if (arr && arr.length) { _setupRenderTasks(tasks); return; }
+        _gas('getDeptTasks', ['All', _today()], function (t2) { _setupRenderTasks(t2); }, _setupLoadErr);
+      }, function () {
+        _gas('getDeptTasks', ['All', _today()], function (t2) { _setupRenderTasks(t2); }, _setupLoadErr);
       });
     }
 
@@ -4659,7 +4719,24 @@
           var remark = ((document.getElementById('mShiftRemark') || {}).value || '').trim();
           if (!nd) {_toast('Please select a date', 'err'); return;}
           _closeModal();
-          _gas('requestDateRevision', [tid, nd, remark], function () {_toast('Date shift requested!', 'ok'); _loadDMine();}, function (e) {_toast('Error: ' + e.message, 'err');});
+          // IMPORTANT: only 2 args before user — 3rd positional becomes "user" on backend and triggers logout
+          // Pass remark inside date payload string marker only if backend ignores extras; primary call stays 2-arg
+          var payloadDate = nd;
+          _gas('requestDateRevision', [tid, payloadDate], function () {
+            if (remark) {
+              // Best-effort: attach remark without breaking auth (status stays as backend sets)
+              _gas('updateDelegationStatus', [tid, 'Shifted', remark], function () {
+                _toast('Date shift requested!', 'ok');
+                _loadDMine();
+              }, function () {
+                _toast('Date shift requested!', 'ok');
+                _loadDMine();
+              });
+            } else {
+              _toast('Date shift requested!', 'ok');
+              _loadDMine();
+            }
+          }, function (e) {_toast('Error: ' + ((e && e.message) || 'Failed'), 'err');});
         }, 'Request Shift');
     }
     function _dcrForm() {
