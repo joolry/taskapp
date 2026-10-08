@@ -1,4 +1,4 @@
-// api/_lib.js — RPC router: global snapshot (primary) → per-fn cache → live GAS
+// api/_lib.js — READ = Firestore snapshot only | WRITE = GAS then background rebuild
 const crypto = require('crypto');
 const cache = require('./_cache');
 const store = require('./_store');
@@ -33,17 +33,25 @@ const ALLOWED = new Set([
   'savePayroll', 'saveWeeklyCommitment', 'transferChecklistTask',
   'updateCommitmentStatus', 'updateDelegationStatus', 'updateIncrementAppraisal',
   'updatePayrollStatus', 'validateGpsForAttendance',
-  // system (Vercel only)
   'getSnapshot'
 ]);
 
-// Served from global Firestore snapshot when available (Fresko-style)
+// These MUST never wait on GAS when a snapshot exists
 const SNAPSHOT_READS = new Set([
+  // Dashboard / boot
   'getBootData', 'getAllData', 'getDashboardStats', 'getDashboardStatsFresh',
-  'getTodayAttendanceStatus', 'getTodayTasks',
+  'getTodayAttendanceStatus', 'getTodayCelebrations', 'getRecentActivity',
+  // Checklist
+  'getTodayTasks', 'getWeeklyTasks', 'getTaskHistory', 'getDeptTasks', 'getTaskSetup',
+  'getTeamChecklistToday',
+  // Delegation
   'getMyDelegations', 'getMyDelegatedOut', 'getAllDelegations',
-  'getAnnouncements', 'getAllAppConfigForFrontend', 'getHolidayList',
-  'getDoerList', 'getTeamAttendanceStatus', 'getTeamChecklistToday'
+  // Attendance & Leave
+  'getMyAttendance', 'getTeamAttendanceStatus',
+  'getLeaveBalance', 'getLeaveSummary', 'getLeaveRequests',
+  'getRegularizationRequests',
+  // Shared
+  'getAnnouncements', 'getAllAppConfigForFrontend', 'getHolidayList', 'getDoerList'
 ]);
 
 const SESSION_HOURS = 12;
@@ -90,6 +98,7 @@ let waitUntil = (p) => { p.catch(() => {}); };
 try { waitUntil = require('@vercel/functions').waitUntil || waitUntil; } catch (e) {}
 
 const MAX_LOOPS = 3;
+let _syncTimer = null;
 
 async function acquireSync() {
   const ref = store.metaRef('sync');
@@ -157,24 +166,33 @@ async function runSync() {
   }
 }
 
+/** Schedule one rebuild; multiple writes within 5s collapse to a single sync */
+function scheduleSync() {
+  if (_syncTimer) clearTimeout(_syncTimer);
+  _syncTimer = setTimeout(() => {
+    _syncTimer = null;
+    runSync().catch((e) => console.error('bg sync', e.message));
+  }, 5000);
+  // Keep Vercel from freezing the timer
+  waitUntil(new Promise((r) => setTimeout(r, 5500)));
+}
+
 async function tryGlobalSnap(fn, args, email, meta) {
   if (!SNAPSHOT_READS.has(fn)) return undefined;
   if (process.env.SNAPSHOT !== 'on') return undefined;
   try {
-    let m = await store.getMeta();
+    const m = await store.getMeta();
     if (!m) {
       waitUntil(runSync().catch(() => {}));
-      return undefined;
+      return undefined; // first boot only — no snap yet
     }
     const st = await store.getSyncState();
-    // If rebuild in progress, still serve last good snapshot (Fresko: don't block UI)
     const snap = await store.loadSnapshot(m);
     const out = fromSnapshot(fn, args, email, snap);
     if (out !== undefined) {
       meta.cache = 'SNAP';
       meta.gasMs = 0;
-      // Self-heal if dirty and not syncing
-      if (st.dirty && !st.syncing) waitUntil(runSync().catch(() => {}));
+      if (st.dirty && !st.syncing) scheduleSync();
       return out;
     }
   } catch (e) {
@@ -196,7 +214,6 @@ async function handle(fn, args, token, meta) {
         email: String(r.user.email).toLowerCase(),
         exp: Date.now() + SESSION_HOURS * 3600e3
       });
-      // Warm snapshot in background after login
       if (process.env.SNAPSHOT === 'on') {
         waitUntil(runSync().catch(() => {}));
       }
@@ -209,38 +226,36 @@ async function handle(fn, args, token, meta) {
   const s = verify(token);
   if (!s) return { success: false, error: 'NOT_AUTHENTICATED' };
 
-  // Contract: last arg is always passedUser — replace with verified identity
   const clientArgs = args.slice(0, -1);
   const gasArgs = clientArgs.concat([{ email: s.email }]);
 
-  // ── 1. Global snapshot (hot path) ──────────────────────────────────────
+  // ── READS: snapshot first; NEVER block UI on rebuild ────────────────────
   if (isRead(fn)) {
     const snapOut = await tryGlobalSnap(fn, clientArgs, s.email, meta);
     if (snapOut !== undefined) return snapOut;
-  }
 
-  // ── 2. Per-fn cache → live GAS ─────────────────────────────────────────
-  const run = async () => {
-    const g = Date.now();
-    const out = await callGas(fn, gasArgs, isRead(fn));
-    meta.gasMs = Date.now() - g;
-    return out;
-  };
-
-  if (isRead(fn)) {
+    // Only non-SNAPSHOT_READS (analytics etc.) or first-ever miss → cache/GAS
+    const run = async () => {
+      const g = Date.now();
+      const out = await callGas(fn, gasArgs, true);
+      meta.gasMs = Date.now() - g;
+      return out;
+    };
     return cache.wrap(fn, clientArgs, s.email, run, meta);
   }
 
-  // Write path — return ASAP; rebuild snapshot in background (debounced)
-  const r = await run();
-  // Fire-and-forget invalidation (don't await — keeps write latency = GAS only)
+  // ── WRITES: GAS only, then mark dirty + debounced rebuild ───────────────
+  const g = Date.now();
+  const r = await callGas(fn, gasArgs, false);
+  meta.gasMs = Date.now() - g;
+  meta.cache = 'WRITE';
+
   waitUntil((async () => {
     try { await cache.bump(); } catch (e) {}
     try { await store.markDirty(); } catch (e) {}
-    // Debounce: wait 2s so rapid shift/complete/create collapse into one rebuild
-    await new Promise((res) => setTimeout(res, 2000));
-    try { await runSync(); } catch (e) { console.error('bg sync', e.message); }
+    scheduleSync();
   })());
+
   return r;
 }
 
