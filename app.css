@@ -13218,3 +13218,63 @@
     min-width: 140px !important;
   }
 }
+
+/* ═══ Mobile-first polish v20 ═══ */
+@media (max-width: 768px) {
+  body { -webkit-tap-highlight-color: transparent; }
+  #content, .content, .main-area {
+    padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+  .mod-head {
+    padding: 12px 14px !important;
+    position: sticky; top: 0; z-index: 20;
+    background: var(--bg);
+  }
+  .mod-title { font-size: 18px !important; }
+  .tabs, .tab-row, .ck-tabs {
+    overflow-x: auto; -webkit-overflow-scrolling: touch;
+    flex-wrap: nowrap !important; gap: 6px !important;
+    padding-bottom: 4px;
+  }
+  .tabs button, .tab-btn, .ck-tab {
+    flex-shrink: 0; min-height: 40px; padding: 8px 14px !important;
+    font-size: 12.5px !important;
+  }
+  .card, .table-card {
+    border-radius: 14px !important;
+    margin-left: 0; margin-right: 0;
+  }
+  input, select, textarea, .ana-sel, .tam-sel {
+    font-size: 16px !important; /* prevents iOS zoom */
+    min-height: 44px;
+  }
+  .btn, button.btn, .btn-sm {
+    min-height: 44px; padding: 10px 16px !important;
+  }
+  .sb { display: none !important; }
+  .mob-nav {
+    display: flex !important;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .mob-nav-item {
+    min-height: 52px;
+  }
+  .mob-nav-item span:not(.mob-nav-pill) {
+    font-size: 10px; font-weight: 700;
+  }
+  /* Forms full width */
+  .fgrp, .form-card, .lbox {
+    max-width: 100% !important;
+  }
+  /* Delegation / checklist cards denser */
+  .del-card, .task-card {
+    padding: 12px !important;
+  }
+}
+@media (max-width: 480px) {
+  .mod-sub { display: none; }
+  .dash-qa-grid {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 10px !important;
+  }
+}
