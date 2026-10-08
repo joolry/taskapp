@@ -132,7 +132,8 @@ async function callGas(action, args, retry) {
 }
 
 // token: from Authorization header. Server decides WHO the user is; client-sent user is ignored.
-async function handle(fn, args, token) {
+async function handle(fn, args, token, meta) {
+  meta = meta || {};
   args = Array.isArray(args) ? args : [];
   if (fn === 'serverUptime') return callGas('serverUptime', [], true);
   if (fn === 'processLogin') {
@@ -147,8 +148,8 @@ async function handle(fn, args, token) {
   if (!s) return { success: false, error: 'NOT_AUTHENTICATED' };
   // Contract: last arg is always the logged-in user (passedUser). Replace with verified identity.
   args = args.slice(0, -1).concat([{ email: s.email }]);
-  const run = () => callGas(fn, args, isRead(fn));
-  if (isRead(fn)) return cache.wrap(fn, args.slice(0, -1), s.email, run);
+  const run = async () => { const g = Date.now(); const out = await callGas(fn, args, isRead(fn)); meta.gasMs = Date.now() - g; return out; };
+  if (isRead(fn)) return cache.wrap(fn, args.slice(0, -1), s.email, run, meta);
   const r = await run();
   await cache.bump();            // any write invalidates cached reads (no-op unless SNAPSHOT=on)
   return r;
