@@ -1,98 +1,48 @@
-// api/_lib.js — shared logic (underscore = not an endpoint)
+// api/_lib.js — RPC router: global snapshot (primary) → per-fn cache → live GAS
 const crypto = require('crypto');
 const cache = require('./_cache');
+const store = require('./_store');
+const { fromSnapshot } = require('./_snapServe');
+
 const isRead = (fn) => /^(get|validate)/.test(fn);
 
-// Only these GAS functions are callable from the browser (mirror of Code.gs _callFn).
 const ALLOWED = new Set([
-  'approveLeaveRequest',
-  'approveRegularization',
-  'cancelLeaveRequest',
-  'changePassword',
-  'createDelegation',
-  'deactivateTask',
-  'deleteAnnouncement',
-  'getAllAppConfigForFrontend',
-  'getAllData',
-  'getAllDelegations',
-  'getAnalyticsSummary',
-  'getAnalyticsSummaryV2',
-  'getAnnouncements',
-  'getAttendanceAnalytics',
-  'getAttendanceAnalyticsV2',
-  'getAttendanceStats',
-  'getBootData',
-  'getChecklistAnalytics',
-  'getChecklistAnalyticsV2',
-  'getDashboardStats',
-  'getDashboardStatsFresh',
-  'getDelegationAnalytics',
-  'getDelegationAnalyticsV2',
-  'getDeptTasks',
-  'getDoerList',
-  'getEMDashboard',
-  'getEMDoerDetail',
-  'getEmployeeDetailV2',
-  'getEmployeeDirectory',
-  'getEmployeeStats',
-  'getHolidayList',
-  'getIncrementAppraisals',
-  'getLeaveBalance',
-  'getLeaveRequests',
-  'getLeaveSummary',
-  'getMusterGrid',
-  'getMusterReport',
-  'getMyAttendance',
-  'getMyDelegatedOut',
-  'getMyDelegations',
-  'getMyProfile',
-  'getPayroll',
-  'getPayrollSummary',
-  'getPerformanceReport',
-  'getRecentActivity',
-  'getRegularizationRequests',
-  'getTaskHistory',
-  'getTaskSetup',
-  'getTeamAttendanceStatus',
-  'getTeamChecklistToday',
-  'getTodayAttendanceStatus',
-  'getTodayCelebrations',
-  'getTodayTasks',
-  'getTopPerformers',
-  'getWeeklyCommitments',
-  'getWeeklyTasks',
-  'managerCompleteDelegation',
-  'managerShiftDelegation',
-  'managerShiftTask',
-  'markStaffAttendance',
-  'markTaskDone',
-  'markTeamTaskDone',
-  'portalDeleteTask',
-  'portalGenerateChecklist',
-  'postAnnouncement',
-  'recordCheckIn',
-  'recordCheckOut',
-  'requestDateRevision',
-  'requestLeave',
-  'requestRegularization',
-  'saveIncrementAppraisal',
-  'saveNewTask',
-  'savePayroll',
-  'saveWeeklyCommitment',
-  'transferChecklistTask',
-  'updateCommitmentStatus',
-  'updateDelegationStatus',
-  'updateIncrementAppraisal',
-  'updatePayrollStatus',
-  'validateGpsForAttendance',
+  'approveLeaveRequest', 'approveRegularization', 'cancelLeaveRequest', 'changePassword',
+  'createDelegation', 'deactivateTask', 'deleteAnnouncement',
+  'getAllAppConfigForFrontend', 'getAllData', 'getAllDelegations',
+  'getAnalyticsSummary', 'getAnalyticsSummaryV2', 'getAnnouncements',
+  'getAttendanceAnalytics', 'getAttendanceAnalyticsV2', 'getAttendanceStats',
+  'getBootData', 'getChecklistAnalytics', 'getChecklistAnalyticsV2',
+  'getDashboardStats', 'getDashboardStatsFresh',
+  'getDelegationAnalytics', 'getDelegationAnalyticsV2',
+  'getDeptTasks', 'getDoerList', 'getEMDashboard', 'getEMDoerDetail',
+  'getEmployeeDetailV2', 'getEmployeeDirectory', 'getEmployeeStats',
+  'getHolidayList', 'getIncrementAppraisals', 'getLeaveBalance',
+  'getLeaveRequests', 'getLeaveSummary', 'getMusterGrid', 'getMusterReport',
+  'getMyAttendance', 'getMyDelegatedOut', 'getMyDelegations', 'getMyProfile',
+  'getPayroll', 'getPayrollSummary', 'getPerformanceReport', 'getRecentActivity',
+  'getRegularizationRequests', 'getTaskHistory', 'getTaskSetup',
+  'getTeamAttendanceStatus', 'getTeamChecklistToday', 'getTodayAttendanceStatus',
+  'getTodayCelebrations', 'getTodayTasks', 'getTopPerformers',
+  'getWeeklyCommitments', 'getWeeklyTasks',
+  'managerCompleteDelegation', 'managerShiftDelegation', 'managerShiftTask',
+  'markStaffAttendance', 'markTaskDone', 'markTeamTaskDone',
+  'portalDeleteTask', 'portalGenerateChecklist', 'postAnnouncement',
+  'recordCheckIn', 'recordCheckOut', 'requestDateRevision', 'requestLeave',
+  'requestRegularization', 'saveIncrementAppraisal', 'saveNewTask',
+  'savePayroll', 'saveWeeklyCommitment', 'transferChecklistTask',
+  'updateCommitmentStatus', 'updateDelegationStatus', 'updateIncrementAppraisal',
+  'updatePayrollStatus', 'validateGpsForAttendance',
+  // system (Vercel only)
+  'getSnapshot'
 ]);
-// Read-only calls: safe to retry once. Everything else is a write => NEVER auto-retried.
-const RETRY_SAFE = new Set([
-  'getAllData','getBootData','getDashboardStats','getDashboardStatsFresh','getTodayTasks','getWeeklyTasks',
-  'getDeptTasks','getTaskHistory','getTaskSetup','getMyDelegations','getMyDelegatedOut','getAllDelegations',
-  'getTodayAttendanceStatus','getMyAttendance','getTeamAttendanceStatus','getMusterReport','getMusterGrid',
-  'getLeaveRequests','getLeaveSummary','getLeaveBalance','getAnnouncements','getHolidayList','getDoerList',
-  'getEmployeeDirectory','getMyProfile','getRecentActivity','getAllAppConfigForFrontend','getTodayCelebrations'
+
+// Served from global Firestore snapshot when available (Fresko-style)
+const SNAPSHOT_READS = new Set([
+  'getBootData', 'getAllData', 'getDashboardStats', 'getDashboardStatsFresh',
+  'getTodayAttendanceStatus', 'getTodayTasks', 'getMyDelegations',
+  'getAnnouncements', 'getAllAppConfigForFrontend', 'getHolidayList',
+  'getDoerList', 'getTeamAttendanceStatus', 'getTeamChecklistToday'
 ]);
 
 const SESSION_HOURS = 12;
@@ -103,6 +53,7 @@ function sign(payload) {
   const sig = crypto.createHmac('sha256', process.env.SESSION_SECRET).update(body).digest('base64url');
   return body + '.' + sig;
 }
+
 function verify(token) {
   if (!token || token.indexOf('.') < 0) return null;
   const [body, sig] = token.split('.');
@@ -127,31 +78,166 @@ async function callGas(action, args, retry) {
     return await r.json();
   } catch (e) {
     if (retry) return callGas(action, args, false);
-    return { success: false, error: 'Server busy. Pehle check kar lo ki entry save hui ya nahi (Refresh), phir dobara karo.' };
+    return {
+      success: false,
+      error: 'Server busy. Pehle check kar lo ki entry save hui ya nahi (Refresh), phir dobara karo.'
+    };
   } finally { clearTimeout(t); }
 }
 
-// token: from Authorization header. Server decides WHO the user is; client-sent user is ignored.
+let waitUntil = (p) => { p.catch(() => {}); };
+try { waitUntil = require('@vercel/functions').waitUntil || waitUntil; } catch (e) {}
+
+const MAX_LOOPS = 3;
+
+async function acquireSync() {
+  const ref = store.metaRef('sync');
+  return store.db().runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const s = snap.exists ? snap.data() : {};
+    const now = Date.now();
+    if (s.syncing && now - (s.syncStartedAt || 0) < store.LEASE_MS) {
+      tx.set(ref, { dirty: true }, { merge: true });
+      return false;
+    }
+    tx.set(ref, { syncing: true, syncStartedAt: now, dirty: false }, { merge: true });
+    return true;
+  });
+}
+
+async function releaseSync() {
+  const ref = store.metaRef('sync');
+  return store.db().runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const s = snap.exists ? snap.data() : {};
+    if (s.dirty) {
+      tx.set(ref, { dirty: false, syncStartedAt: Date.now() }, { merge: true });
+      return true;
+    }
+    tx.set(ref, { syncing: false, lastSyncAt: Date.now(), lastError: '' }, { merge: true });
+    return false;
+  });
+}
+
+async function runSync() {
+  let stage = 'acquire';
+  let acquired = false;
+  let loops = 0;
+  try {
+    if (!(await acquireSync())) return { ran: false, queued: true };
+    acquired = true;
+    for (;;) {
+      loops++;
+      stage = 'getSnapshot';
+      const snap = await callGas('getSnapshot', [], false);
+      stage = 'validate';
+      if (!snap || snap.success === false) {
+        throw new Error((snap && snap.error) || 'getSnapshot failed');
+      }
+      stage = 'save';
+      await store.saveSnapshot(snap);
+      stage = 'release';
+      if (!(await releaseSync())) break;
+      if (loops >= MAX_LOOPS) {
+        await store.metaRef('sync').set({ syncing: false, dirty: true }, { merge: true });
+        break;
+      }
+    }
+    return { ran: true, loops };
+  } catch (e) {
+    e.stage = stage;
+    if (acquired) {
+      await store.metaRef('sync').set({
+        syncing: false,
+        lastError: stage + ': ' + String(e.message || e)
+      }, { merge: true }).catch(() => {});
+    }
+    throw e;
+  }
+}
+
+async function tryGlobalSnap(fn, args, email, meta) {
+  if (!SNAPSHOT_READS.has(fn)) return undefined;
+  if (process.env.SNAPSHOT !== 'on') return undefined;
+  try {
+    let m = await store.getMeta();
+    if (!m) {
+      waitUntil(runSync().catch(() => {}));
+      return undefined;
+    }
+    const st = await store.getSyncState();
+    // If rebuild in progress, still serve last good snapshot (Fresko: don't block UI)
+    const snap = await store.loadSnapshot(m);
+    const out = fromSnapshot(fn, args, email, snap);
+    if (out !== undefined) {
+      meta.cache = 'SNAP';
+      meta.gasMs = 0;
+      // Self-heal if dirty and not syncing
+      if (st.dirty && !st.syncing) waitUntil(runSync().catch(() => {}));
+      return out;
+    }
+  } catch (e) {
+    console.error('[tryGlobalSnap]', e.message);
+  }
+  return undefined;
+}
+
 async function handle(fn, args, token, meta) {
   meta = meta || {};
   args = Array.isArray(args) ? args : [];
+
   if (fn === 'serverUptime') return callGas('serverUptime', [], true);
+
   if (fn === 'processLogin') {
     const r = await callGas('processLogin', [args[0], args[1]], false);
     if (r && r.success && r.user && r.user.email) {
-      r.token = sign({ email: String(r.user.email).toLowerCase(), exp: Date.now() + SESSION_HOURS * 3600e3 });
+      r.token = sign({
+        email: String(r.user.email).toLowerCase(),
+        exp: Date.now() + SESSION_HOURS * 3600e3
+      });
+      // Warm snapshot in background after login
+      if (process.env.SNAPSHOT === 'on') {
+        waitUntil(runSync().catch(() => {}));
+      }
     }
     return r;
   }
+
   if (!ALLOWED.has(fn)) return { success: false, error: 'Unknown function' };
+
   const s = verify(token);
   if (!s) return { success: false, error: 'NOT_AUTHENTICATED' };
-  // Contract: last arg is always the logged-in user (passedUser). Replace with verified identity.
-  args = args.slice(0, -1).concat([{ email: s.email }]);
-  const run = async () => { const g = Date.now(); const out = await callGas(fn, args, isRead(fn)); meta.gasMs = Date.now() - g; return out; };
-  if (isRead(fn)) return cache.wrap(fn, args.slice(0, -1), s.email, run, meta);
+
+  // Contract: last arg is always passedUser — replace with verified identity
+  const clientArgs = args.slice(0, -1);
+  const gasArgs = clientArgs.concat([{ email: s.email }]);
+
+  // ── 1. Global snapshot (hot path) ──────────────────────────────────────
+  if (isRead(fn)) {
+    const snapOut = await tryGlobalSnap(fn, clientArgs, s.email, meta);
+    if (snapOut !== undefined) return snapOut;
+  }
+
+  // ── 2. Per-fn cache → live GAS ─────────────────────────────────────────
+  const run = async () => {
+    const g = Date.now();
+    const out = await callGas(fn, gasArgs, isRead(fn));
+    meta.gasMs = Date.now() - g;
+    return out;
+  };
+
+  if (isRead(fn)) {
+    return cache.wrap(fn, clientArgs, s.email, run, meta);
+  }
+
+  // Write path
   const r = await run();
-  await cache.bump();            // any write invalidates cached reads (no-op unless SNAPSHOT=on)
+  await cache.bump();
+  try {
+    await store.markDirty();
+  } catch (e) {}
+  waitUntil(runSync().catch((e) => console.error('bg sync', e.message)));
   return r;
 }
-module.exports = { handle, ALLOWED, RETRY_SAFE };
+
+module.exports = { handle, ALLOWED, runSync, store };
