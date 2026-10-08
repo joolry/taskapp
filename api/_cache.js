@@ -50,10 +50,10 @@ async function wrap(fn, args, email, loader) {
   if (!enabled() || !ttl) return loader();
   let v0 = 0, ref;
   try {
-    v0 = await ver();
     const key = crypto.createHash('sha1').update(fn + '|' + email + '|' + JSON.stringify(args)).digest('hex');
     ref = db().doc('_snap/' + key);
-    const s = await ref.get();
+    const both = await Promise.all([ver(), ref.get()]);   // one round-trip instead of two
+    v0 = both[0]; const s = both[1];
     if (s.exists) {
       const d = s.data();
       if (Date.now() - d.ts < ttl * 1000 && (STATIC[fn] || d.ver === v0)) return JSON.parse(d.json);
@@ -63,7 +63,7 @@ async function wrap(fn, args, email, loader) {
   try {
     const json = JSON.stringify(out);
     if (ref && out && out.success !== false && json.length < 900000) {
-      await defer(ref.set({ fn, ver: v0, ts: Date.now(), json }));   // ver = version seen BEFORE the GAS call
+      await defer(ref.set({ fn, ver: v0, ts: Date.now(), json, exp: new Date(Date.now() + 36 * 3600e3) }));   // ver = version seen BEFORE the GAS call
     }
   } catch (e) {}
   return out;
