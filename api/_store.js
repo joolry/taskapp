@@ -3,7 +3,7 @@
 const zlib = require('zlib');
 
 const CHUNK_BYTES = 900 * 1024;
-const LEASE_MS = 120000;
+const LEASE_MS = 45000; // 45s — expired lock auto-clears
 
 let _db = null;
 let _mem = { version: null, data: null };
