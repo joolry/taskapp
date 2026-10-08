@@ -40,7 +40,8 @@ const ALLOWED = new Set([
 // Served from global Firestore snapshot when available (Fresko-style)
 const SNAPSHOT_READS = new Set([
   'getBootData', 'getAllData', 'getDashboardStats', 'getDashboardStatsFresh',
-  'getTodayAttendanceStatus', 'getTodayTasks', 'getMyDelegations',
+  'getTodayAttendanceStatus', 'getTodayTasks',
+  'getMyDelegations', 'getMyDelegatedOut', 'getAllDelegations',
   'getAnnouncements', 'getAllAppConfigForFrontend', 'getHolidayList',
   'getDoerList', 'getTeamAttendanceStatus', 'getTeamChecklistToday'
 ]);
@@ -230,13 +231,16 @@ async function handle(fn, args, token, meta) {
     return cache.wrap(fn, clientArgs, s.email, run, meta);
   }
 
-  // Write path
+  // Write path — return ASAP; rebuild snapshot in background (debounced)
   const r = await run();
-  await cache.bump();
-  try {
-    await store.markDirty();
-  } catch (e) {}
-  waitUntil(runSync().catch((e) => console.error('bg sync', e.message)));
+  // Fire-and-forget invalidation (don't await — keeps write latency = GAS only)
+  waitUntil((async () => {
+    try { await cache.bump(); } catch (e) {}
+    try { await store.markDirty(); } catch (e) {}
+    // Debounce: wait 2s so rapid shift/complete/create collapse into one rebuild
+    await new Promise((res) => setTimeout(res, 2000));
+    try { await runSync(); } catch (e) { console.error('bg sync', e.message); }
+  })());
   return r;
 }
 
