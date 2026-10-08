@@ -13428,3 +13428,137 @@
   }
 }
 
+
+/* ══════════════════════════════════════════════════════════════════════
+   MODULE MOBILE POLISH — Checklist / Delegation / Attendance / History
+══════════════════════════════════════════════════════════════════════ */
+@media (max-width: 767px) {
+  /* History: cards on mobile, table on desktop */
+  .hist-desk { display: none !important; }
+  .hist-mob { display: block !important; }
+
+  /* Checklist today rows */
+  #ckList .anim-item,
+  #ckList > div {
+    flex-wrap: wrap !important;
+  }
+  #ckList .ck-btn,
+  #ckList .btn-xs {
+    min-height: 36px !important;
+  }
+
+  /* Checklist filter bar */
+  #ctodayPane .fbar,
+  #chistPane > div:first-child {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+  #ctodayPane .fbar label,
+  #chistPane label {
+    margin-top: 4px;
+  }
+  #ctodayPane .fbar input,
+  #ctodayPane .fbar select,
+  #chistPane input,
+  #chistPane select {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  /* Task setup */
+  #csetupPane .card,
+  #setupTaskList {
+    max-width: 100% !important;
+    overflow: hidden !important;
+  }
+  #tsFilterBar {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+
+  /* Delegation cards */
+  .dcard {
+    overflow: hidden !important;
+  }
+  .dcard .dc-top {
+    flex-wrap: wrap !important;
+    gap: 6px !important;
+  }
+  .dcard .dc-desc {
+    width: 100% !important;
+    white-space: normal !important;
+    overflow: visible !important;
+    text-overflow: unset !important;
+  }
+  .dcard .dc-act {
+    width: 100% !important;
+    flex-wrap: wrap !important;
+  }
+  .dcard .dc-act .btn {
+    flex: 1 1 45% !important;
+    min-width: 120px !important;
+    justify-content: center !important;
+  }
+
+  /* Delegation filter bars */
+  #dminePane > div:first-child,
+  #doutPane > div:first-child,
+  #dallPane > div:first-child {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+  #dminePane input[type="date"],
+  #doutPane input[type="date"],
+  #dallPane input[type="date"],
+  #dminePane select,
+  #doutPane select,
+  #dallPane select {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+
+  /* Attendance punch + forms */
+  .att-punch-card {
+    padding: 16px !important;
+  }
+  #aregPane .fbar,
+  #amyPane .fbar,
+  .fbar {
+    flex-wrap: wrap !important;
+  }
+  .frow,
+  .frow-2,
+  .frow-3 {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 10px !important;
+  }
+  .fgrp {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  /* Tabs scroll */
+  .tabs {
+    overflow-x: auto !important;
+    flex-wrap: nowrap !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+  .tab {
+    flex-shrink: 0 !important;
+  }
+
+  /* Tables always scroll container */
+  .table-card,
+  .tw {
+    max-width: 100% !important;
+    overflow-x: auto !important;
+  }
+}
+
+@media (min-width: 768px) {
+  .hist-desk { display: block !important; }
+  .hist-mob { display: none !important; }
+}
+
