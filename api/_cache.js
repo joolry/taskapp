@@ -32,6 +32,13 @@ const DYN = {
 };
 // NEVER cached: getDashboardStatsFresh, getTodayAttendanceStatus, getMyProfile, getPayroll*, getIncrementAppraisals, validate*, processLogin
 
+// Serve an EXPIRED snapshot instantly (up to N sec old) and refresh it in the background.
+const H6 = 21600, H24 = 86400;
+const STALE = Object.assign({}, { getAllAppConfigForFrontend: H24, getHolidayList: H24, getTodayCelebrations: H24, getDoerList: H24, getEmployeeDirectory: H24, getTaskSetup: H6,
+  getChecklistAnalytics: H6, getChecklistAnalyticsV2: H6, getAnalyticsSummary: H6, getAnalyticsSummaryV2: H6, getAttendanceAnalytics: H6,
+  getAttendanceAnalyticsV2: H6, getDelegationAnalytics: H6, getDelegationAnalyticsV2: H6, getTopPerformers: H6, getPerformanceReport: H6, getMusterReport: 1800, getMusterGrid: 1800 });
+const istDay = () => new Date(Date.now() + 19800000).toISOString().slice(0, 10);   // day rollover => automatic miss
+
 const enabled = () => process.env.SNAPSHOT === 'on';
 const ttlOf = (fn) => STATIC[fn] || DYN[fn] || 0;
 let verMem = { v: 0, t: 0 };
@@ -45,20 +52,30 @@ async function bump() {
   if (!enabled()) return;
   try { await db().doc('_meta/state').set({ ver: inc(1), ts: Date.now() }, { merge: true }); verMem.t = 0; } catch (e) {}
 }
-async function wrap(fn, args, email, loader) {
+async function wrap(fn, args, email, loader, meta) {
+  meta = meta || {};
   const ttl = ttlOf(fn);
-  if (!enabled() || !ttl) return loader();
+  if (!enabled() || !ttl) { meta.cache = 'OFF'; return loader(); }
   let v0 = 0, ref;
   try {
-    const key = crypto.createHash('sha1').update(fn + '|' + email + '|' + JSON.stringify(args)).digest('hex');
+    const key = crypto.createHash('sha1').update(fn + '|' + istDay() + '|' + email + '|' + JSON.stringify(args)).digest('hex');
     ref = db().doc('_snap/' + key);
     const both = await Promise.all([ver(), ref.get()]);   // one round-trip instead of two
     v0 = both[0]; const s = both[1];
     if (s.exists) {
       const d = s.data();
-      if (Date.now() - d.ts < ttl * 1000 && (STATIC[fn] || d.ver === v0)) return JSON.parse(d.json);
+      if (Date.now() - d.ts < ttl * 1000 && (STATIC[fn] || d.ver === v0)) { meta.cache = 'HIT'; return JSON.parse(d.json); }
+      if (STALE[fn] && Date.now() - d.ts < STALE[fn] * 1000) {          // instant answer now, fresh copy for next time
+        meta.cache = 'STALE';
+        await defer((async () => { try {
+          const o = await loader();
+          if (o && o.success !== false) { const j = JSON.stringify(o); if (j.length < 900000) await ref.set({ fn, ver: v0, ts: Date.now(), json: j, exp: new Date(Date.now() + 36 * 3600e3) }); }
+        } catch (e) {} })());
+        return JSON.parse(d.json);
+      }
     }
-  } catch (e) { return loader(); }
+  } catch (e) { meta.cache = 'ERR'; return loader(); }
+  meta.cache = 'MISS';
   const out = await loader();
   try {
     const json = JSON.stringify(out);
