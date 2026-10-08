@@ -168,15 +168,41 @@ async function runSync() {
   }
 }
 
-/** Schedule one rebuild; multiple writes within 5s collapse to a single sync */
+/** Debounced rebuild for non-critical (dirty flag self-heal) */
 function scheduleSync() {
   if (_syncTimer) clearTimeout(_syncTimer);
   _syncTimer = setTimeout(() => {
     _syncTimer = null;
     runSync().catch((e) => console.error('bg sync', e.message));
-  }, 5000);
-  // Keep Vercel from freezing the timer
-  waitUntil(new Promise((r) => setTimeout(r, 5500)));
+  }, 3000);
+  waitUntil(new Promise((r) => setTimeout(r, 3500)));
+}
+
+/** After a write: rebuild snapshot NOW (bypass lock) so next read is fresh */
+async function rebuildAfterWrite() {
+  try {
+    await store.metaRef('sync').set({
+      syncing: true, syncStartedAt: Date.now(), dirty: false, lastError: ''
+    }, { merge: true });
+  } catch (e) {}
+  try {
+    const snap = await callGas('getSnapshot', [], false);
+    if (snap && snap.success !== false) {
+      await store.saveSnapshot(snap);
+      await store.metaRef('sync').set({
+        syncing: false, dirty: false, lastSyncAt: Date.now(), lastError: ''
+      }, { merge: true });
+      return;
+    }
+    throw new Error((snap && snap.error) || 'getSnapshot failed');
+  } catch (e) {
+    console.error('rebuildAfterWrite', e.message);
+    try {
+      await store.metaRef('sync').set({
+        syncing: false, dirty: true, lastError: String(e.message || e)
+      }, { merge: true });
+    } catch (e2) {}
+  }
 }
 
 async function tryGlobalSnap(fn, args, email, meta) {
@@ -246,17 +272,16 @@ async function handle(fn, args, token, meta) {
     return cache.wrap(fn, clientArgs, s.email, run, meta);
   }
 
-  // ── WRITES: GAS only, then mark dirty + debounced rebuild ───────────────
+  // ── WRITES: GAS → rebuild SNAP → then respond (UI refresh gets fresh data)
   const g = Date.now();
   const r = await callGas(fn, gasArgs, false);
   meta.gasMs = Date.now() - g;
   meta.cache = 'WRITE';
 
-  waitUntil((async () => {
-    try { await cache.bump(); } catch (e) {}
-    try { await store.markDirty(); } catch (e) {}
-    scheduleSync();
-  })());
+  try { await cache.bump(); } catch (e) {}
+  // Wait for SNAP so next get* from same page load is not stale
+  await rebuildAfterWrite();
+  meta.snapRebuilt = true;
 
   return r;
 }
