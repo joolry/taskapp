@@ -178,23 +178,37 @@ function buildTodayTasks(snap, doer, dateArg) {
   return out;
 }
 
+function mapDelRow(d) {
+  return {
+    task_id: String(d.taskId || d['Task ID'] || ''),
+    task: String(d.task || d['Task'] || ''),
+    status: String(d.status || d['Status'] || ''),
+    delegated_by: String(d.delegatedBy || d['Delegated By'] || ''),
+    delegated_to: String(d.delegatedTo || d['Delegated To'] || ''),
+    first_date: normDate(d.firstDate || d['First Date'] || ''),
+    final_date: normDate(d.finalDate || d['Final Date'] || ''),
+    priority: String(d.priority || d['Priority'] || ''),
+    remark: String(d.remark || d['Remark'] || ''),
+    timestamp: String(d.timestamp || d['Timestamp'] || '')
+  };
+}
+
 function buildMyDelegations(snap, doer) {
   const code = empCode(doer);
   return (snap.delegations || []).filter(function (d) {
     return String(d.delegatedTo || d['Delegated To'] || '') === code;
-  }).map(function (d) {
-    return {
-      task_id: String(d.taskId || d['Task ID'] || ''),
-      task: String(d.task || d['Task'] || ''),
-      status: String(d.status || d['Status'] || ''),
-      delegated_by: String(d.delegatedBy || d['Delegated By'] || ''),
-      delegated_to: String(d.delegatedTo || d['Delegated To'] || ''),
-      first_date: normDate(d.firstDate || d['First Date'] || ''),
-      final_date: normDate(d.finalDate || d['Final Date'] || ''),
-      priority: String(d.priority || d['Priority'] || ''),
-      remark: String(d.remark || d['Remark'] || '')
-    };
-  });
+  }).map(mapDelRow);
+}
+
+function buildMyDelegatedOut(snap, doer) {
+  const code = empCode(doer);
+  return (snap.delegations || []).filter(function (d) {
+    return String(d.delegatedBy || d['Delegated By'] || '') === code;
+  }).map(mapDelRow);
+}
+
+function buildAllDelegations(snap) {
+  return (snap.delegations || []).map(mapDelRow);
 }
 
 function buildAnnouncements(snap) {
@@ -353,6 +367,10 @@ function fromSnapshot(fn, args, email, snap) {
       return buildTodayTasks(snap, doer, args[1] || args[0]);
     case 'getMyDelegations':
       return buildMyDelegations(snap, doer);
+    case 'getMyDelegatedOut':
+      return buildMyDelegatedOut(snap, doer);
+    case 'getAllDelegations':
+      return buildAllDelegations(snap);
     case 'getAnnouncements':
       return buildAnnouncements(snap);
     case 'getAllAppConfigForFrontend':
