@@ -106,11 +106,13 @@ async function acquireSync() {
     const snap = await tx.get(ref);
     const s = snap.exists ? snap.data() : {};
     const now = Date.now();
-    if (s.syncing && now - (s.syncStartedAt || 0) < store.LEASE_MS) {
+    const leaseAlive = s.syncing && (now - (s.syncStartedAt || 0) < store.LEASE_MS);
+    if (leaseAlive) {
       tx.set(ref, { dirty: true }, { merge: true });
       return false;
     }
-    tx.set(ref, { syncing: true, syncStartedAt: now, dirty: false }, { merge: true });
+    // Lease expired or idle → take lock (clears stuck syncing:true)
+    tx.set(ref, { syncing: true, syncStartedAt: now, dirty: false, lastError: '' }, { merge: true });
     return true;
   });
 }
