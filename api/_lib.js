@@ -1,5 +1,7 @@
 // api/_lib.js — shared logic (underscore = not an endpoint)
 const crypto = require('crypto');
+const cache = require('./_cache');
+const isRead = (fn) => /^(get|validate)/.test(fn);
 
 // Only these GAS functions are callable from the browser (mirror of Code.gs _callFn).
 const ALLOWED = new Set([
@@ -145,6 +147,10 @@ async function handle(fn, args, token) {
   if (!s) return { success: false, error: 'NOT_AUTHENTICATED' };
   // Contract: last arg is always the logged-in user (passedUser). Replace with verified identity.
   args = args.slice(0, -1).concat([{ email: s.email }]);
-  return callGas(fn, args, RETRY_SAFE.has(fn));
+  const run = () => callGas(fn, args, isRead(fn));
+  if (isRead(fn)) return cache.wrap(fn, args.slice(0, -1), s.email, run);
+  const r = await run();
+  await cache.bump();            // any write invalidates cached reads (no-op unless SNAPSHOT=on)
+  return r;
 }
 module.exports = { handle, ALLOWED, RETRY_SAFE };
