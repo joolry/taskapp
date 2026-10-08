@@ -4155,11 +4155,21 @@
           var effStatus = d.is_overdue && d.status !== 'Completed' ? 'Overdue' : d.status;
           if (effStatus !== st) return false;
         }
-        // Due date filter (Final Date)
+        // Due date filter (Final Date) — normalize any date format to YYYY-MM-DD
         if (from || to) {
-          var due = d.final_date || d.first_date || '';
-          if (from && due < from) return false;
-          if (to && due > to) return false;
+          var dueRaw = d.final_date || d.first_date || '';
+          var due = '';
+          if (dueRaw) {
+            var pd = (typeof _parseAnyDate === 'function') ? _parseAnyDate(dueRaw) : null;
+            if (pd && !isNaN(pd.getTime())) {
+              due = pd.getFullYear() + '-' + String(pd.getMonth() + 1).padStart(2, '0') + '-' + String(pd.getDate()).padStart(2, '0');
+            } else {
+              due = String(dueRaw).slice(0, 10);
+            }
+          }
+          if (from && due && due < from) return false;
+          if (to && due && due > to) return false;
+          if ((from || to) && !due) return false;
         }
         return true;
       });
@@ -4238,20 +4248,19 @@
       var list = document.getElementById('doutList');
       if (list) list.innerHTML = _skel(3, 'sk-h5');
 
-      // Naya (SWR):
-      if (_D.myDelegationsMine) {
-        _dApplyFilter('dmine');
-        // background refresh continue karega neeche
+      // SWR: show cache instantly, then refresh
+      if (_D.myDelegatedOut) {
+        _dApplyFilter('dout');
       } else {
         if (list) list.innerHTML = _skel(3, 'sk-h5');
       }
 
-      _gas('getMyDelegations', ['All'], function (dels) {
-        _D.myDelegationsMine = dels;
+      _gas('getMyDelegatedOut', ['All'], function (dels) {
+        _D.myDelegatedOut = dels || [];
         _lcSave();
-        _dApplyFilter('dmine');
+        _dApplyFilter('dout');
       }, function (e) {
-        if (!_D.myDelegationsMine && list) list.innerHTML = e && e.message && e.message.indexOf('Network') > -1
+        if (!_D.myDelegatedOut && list) list.innerHTML = e && e.message && e.message.indexOf('Network') > -1
           ? '<div style="text-align:center;padding:32px 16px"><div style="font-size:32px;margin-bottom:10px">📡</div>' +
           '<div style="font-size:14px;font-weight:800;color:var(--tx);margin-bottom:4px">Connection Error</div>' +
           '<button class="btn btn-sm" onclick="_forceRefresh()"><i class="fas fa-rotate-right"></i> Retry</button></div>'
@@ -4642,12 +4651,15 @@
       _openModal('<i class="fas fa-calendar-days" style="color:var(--V)"></i> Request Date Shift',
         '<p style="font-size:13px;color:var(--tx2);margin-bottom:14px;line-height:1.6">Request a new due date (max 2 revisions allowed):</p>' +
         '<div class="fgrp"><label>New Due Date <span class="req">★</span></label><input type="date" id="mNewDate" min="' + _today() + '" value="' + _daysLater(3) + '"></div>' +
-        '<div class="tip"><i class="fas fa-info-circle"></i> This request will be noted in the delegation record.</div>',
+        '<div class="fgrp" style="margin-top:12px"><label>Remark <span style="font-weight:400;color:var(--tx3)">(optional)</span></label>' +
+        '<textarea id="mShiftRemark" rows="3" placeholder="Why do you need this shift?" style="width:100%;padding:9px 12px;border:1.5px solid var(--bdr);border-radius:8px;font-size:13px;background:var(--bg);color:var(--tx);outline:none;resize:vertical;font-family:inherit;box-sizing:border-box"></textarea></div>' +
+        '<div class="tip" style="margin-top:10px"><i class="fas fa-info-circle"></i> This request will be noted in the delegation record.</div>',
         function () {
           var nd = document.getElementById('mNewDate') ? document.getElementById('mNewDate').value : '';
+          var remark = ((document.getElementById('mShiftRemark') || {}).value || '').trim();
           if (!nd) {_toast('Please select a date', 'err'); return;}
           _closeModal();
-          _gas('requestDateRevision', [tid, nd], function () {_toast('Date shift requested!', 'ok'); _loadDMine();}, function (e) {_toast('Error: ' + e.message, 'err');});
+          _gas('requestDateRevision', [tid, nd, remark], function () {_toast('Date shift requested!', 'ok'); _loadDMine();}, function (e) {_toast('Error: ' + e.message, 'err');});
         }, 'Request Shift');
     }
     function _dcrForm() {
@@ -11380,88 +11392,7 @@
             '</div>';
         }
 
-        if (!tasks.length) {
-          el.innerHTML =
-            '<div class="empty-state"><i class="fas fa-list-check"></i>' +
-            '<h4>No Tasks</h4>' +
-            '<p>No tasks are scheduled for ' + _fmtDate(date) + '.</p></div>';
-          return;
-        }
-
-        el.innerHTML = tasks.map(function (t) {
-          var isDone = t.status === 'Done';
-          var isTransOut = !!(t.is_transferred);
-          var isReceived = !!(t.is_received);
-          var canDo = !isDone && !isTransOut;
-          var isTodayView = (date === _today());
-          var canEditRemark = isDone && !isTransOut && isTodayView;
-
-          var actualFmt = t.actual ? _tsShort(t.actual) : '';
-          var planFmt = '';
-          if (t.scheduled_time && t.planned) {
-            planFmt = _fmtDate(t.planned) + ' ' + t.scheduled_time;
-          } else if (t.scheduled_time) {
-            planFmt = t.scheduled_time;
-          }
-
-          var rowId = 'ckrow_' + t.row_num + '_' + Math.random().toString(36).slice(2, 7);
-          var sc = _colorForStatus(t.status);
-          var rowBorder = isReceived ? 'border-left:3px solid var(--V)' : '';
-
-          var actionBtn = '';
-          if (canDo) {
-            actionBtn = '<button class="ck-btn btn btn-sm btn-xs" onclick="_markDone(\'' + rowId + '\')">' +
-              '<i class="fas fa-check"></i> Done</button>';
-          } else if (canEditRemark) {
-            var safeRemark = String(t.remark || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-            actionBtn = '<button class="btn btn-outline btn-sm btn-xs" onclick="_editDoneRemark(\'' + rowId + '\',\'' + safeRemark + '\')">' +
-              '<i class="fas fa-pen"></i> Edit remark</button>';
-          }
-
-          return '<div class="anim-item" id="' + rowId + '" data-row="' + t.row_num + '" data-occ="' + t.occ +
-            '" data-uid="' + _esc(t.task_uid || '') + '" data-planned="' + _esc(t.planned || '') +
-            '" data-name="' + _esc(t.task_name || '') + '" data-dt="' + _esc(date) +
-            '" style="display:flex;align-items:flex-start;gap:12px;padding:13px 16px;background:var(--sur);border:1px solid var(--bdr);border-radius:12px;margin-bottom:8px;' + rowBorder + '">' +
-            '<div class="ck-circle" style="width:24px;height:24px;border-radius:50%;border:2px solid ' + sc +
-            ';background:' + (isDone ? sc : 'transparent') +
-            ';flex-shrink:0;display:flex;align-items:center;justify-content:center;cursor:' +
-            (canDo ? 'pointer' : 'default') + ';margin-top:1px" ' +
-            (canDo ? 'onclick="_markDone(\'' + rowId + '\')"' : '') + '>' +
-            (isDone ? '<i class="fas fa-check" style="font-size:10px;color:#fff"></i>' : '') +
-            '</div>' +
-            '<div style="flex:1;min-width:0">' +
-            '<div style="font-size:13.5px;font-weight:700;' +
-            (isDone || isTransOut ? 'text-decoration:line-through;color:var(--tx3)' : '') +
-            ';word-break:break-word">' + _esc(t.task_name) + '</div>' +
-            '<div style="font-size:11px;color:var(--tx3);margin-top:4px;display:flex;flex-wrap:wrap;gap:6px;align-items:center">' +
-            _freqBadge(t.frequency) +
-            (isTransOut
-              ? '<span style="padding:2px 8px;border-radius:10px;background:var(--Ol);color:var(--O);font-weight:700;font-size:10.5px"><i class="fas fa-share"></i> Transferred away</span>'
-              : '') +
-            (isReceived
-              ? '<span style="padding:2px 8px;border-radius:10px;background:var(--Vl);color:var(--V);font-weight:700;font-size:10.5px"><i class="fas fa-arrow-right-arrow-left"></i> Transferred to you</span>' +
-              (t.transfer_by ? '<span style="color:var(--tx3);font-size:10.5px"> by ' + _esc(t.transfer_by) + '</span>' : '')
-              : '') +
-            (t.remark
-              ? '<span style="padding:2px 8px;border-radius:8px;background:var(--Il);color:var(--I);font-size:10.5px;font-weight:600"><i class="fas fa-comment-dots"></i> ' + _esc(t.remark) + '</span>'
-              : '') +
-            '<div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap;align-items:center">' +
-            (planFmt
-              ? '<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 9px;border-radius:8px;background:var(--Pl);color:var(--P);font-size:10.5px;font-weight:800"><i class="fas fa-calendar-clock" style="font-size:10px"></i> Plan: <strong>' + _esc(planFmt) + '</strong></span>'
-              : '') +
-            (actualFmt
-              ? '<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 9px;border-radius:8px;background:var(--Gl);color:var(--G);font-size:10.5px;font-weight:800"><i class="fas fa-check-circle" style="font-size:10px"></i> Actual: <strong>' + actualFmt + '</strong></span>'
-              : (planFmt && !isDone
-                ? '<span style="padding:2px 9px;border-radius:8px;background:var(--sur2);color:var(--tx3);font-size:10.5px;border:1px solid var(--bdr)">Actual: pending</span>'
-                : '')) +
-            '</div>' +
-            '</div></div>' +
-            '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0">' +
-            _statusBadge(t.status) +
-            actionBtn +
-            '</div>' +
-            '</div>';
-        }).join('');
+        _renderCkList();
       }, function (e) {
         var msg = (e && e.message) ? e.message : 'Server se connect nahi ho pa raha';
         el.innerHTML =
@@ -11475,15 +11406,6 @@
           '<div style="font-size:11px;color:var(--tx3);margin-top:12px">Past dates pe pehli baar 10–20s lag sakta hai</div>' +
           '</div>';
       });
-
-      _D.todayTasks = tasks || [];
-      // ... existing progress bar code on #ckProgress ...
-      if (!tasks.length) {
-        // empty message can stay inside _renderCkList
-      }
-      _renderCkList();
-      // REMOVE old: el.innerHTML = tasks.map(...).join('');
-
     }
 
 
