@@ -178,7 +178,7 @@ function scheduleSync() {
   waitUntil(new Promise((r) => setTimeout(r, 3500)));
 }
 
-/** After a write: rebuild snapshot NOW (bypass lock) so next read is fresh */
+/** Full rebuild from GAS — NEVER overwrite a good SNAP with empty/broken data */
 async function rebuildAfterWrite() {
   try {
     await store.metaRef('sync').set({
@@ -187,14 +187,22 @@ async function rebuildAfterWrite() {
   } catch (e) {}
   try {
     const snap = await callGas('getSnapshot', [], false);
-    if (snap && snap.success !== false) {
-      await store.saveSnapshot(snap);
-      await store.metaRef('sync').set({
-        syncing: false, dirty: false, lastSyncAt: Date.now(), lastError: ''
-      }, { merge: true });
-      return;
+    if (!snap || snap.success === false) {
+      throw new Error((snap && snap.error) || 'getSnapshot failed');
     }
-    throw new Error((snap && snap.error) || 'getSnapshot failed');
+    // Guard: reject empty snapshot (protects UI from going blank)
+    const doers = (snap.doers || []).length;
+    const hasAny = doers > 0
+      || (snap.checklistToday || []).length > 0
+      || (snap.delegations || []).length > 0
+      || (snap.attendance || []).length > 0;
+    if (!hasAny) {
+      throw new Error('getSnapshot returned empty payload — keeping previous SNAP');
+    }
+    await store.saveSnapshot(snap);
+    await store.metaRef('sync').set({
+      syncing: false, dirty: false, lastSyncAt: Date.now(), lastError: ''
+    }, { merge: true });
   } catch (e) {
     console.error('rebuildAfterWrite', e.message);
     try {
@@ -206,14 +214,22 @@ async function rebuildAfterWrite() {
 }
 
 
-/** Instant patch SNAP after write — no GAS getSnapshot wait */
+/** Instant patch SNAP after write — clone first so a bad mutator cannot wipe live SNAP */
 async function patchSnap(mutator) {
   try {
     const m = await store.getMeta();
     if (!m) return false;
-    const snap = await store.loadSnapshot(m);
+    const live = await store.loadSnapshot(m);
+    // Deep clone so mutations never touch the in-memory cache until save succeeds
+    const snap = JSON.parse(JSON.stringify(live));
+    const beforeDoers = (snap.doers || []).length;
     const ok = mutator(snap);
     if (!ok) return false;
+    // Guard: mutator must not wipe core arrays
+    if (beforeDoers > 0 && !(snap.doers || []).length) {
+      console.error('patchSnap refused: mutator cleared doers');
+      return false;
+    }
     snap.builtAt = new Date().toISOString();
     await store.saveSnapshot(snap);
     return true;
@@ -644,20 +660,21 @@ async function handle(fn, args, token, meta) {
   meta.gasMs = Date.now() - g;
   meta.cache = 'WRITE';
 
-  // Only patch / rebuild if write looked successful
+  // Only touch SNAP if write succeeded
   const ok = r && r.success !== false && !r.error;
   if (ok) {
     try { await cache.bump(); } catch (e) {}
-    // 1) Instant row-level SNAP patch (all MAIN/MY WORK writes)
+    // Instant row patch — primary path (no full getSnapshot)
     const patched = await applyWritePatch(fn, clientArgs, r, s.email);
     meta.snapPatched = !!patched;
-    // 2) Full rebuild: background if patched, await if not (safety net)
-    if (patched) {
-      waitUntil(rebuildAfterWrite().catch(e => console.error('bg rebuild', e.message)));
-    } else {
+    if (!patched) {
+      // Unknown write type: careful full rebuild (guarded against empty)
       await rebuildAfterWrite();
       meta.snapRebuilt = true;
     }
+    // NOTE: no automatic background full rebuild after patch —
+    // it was wiping good SNAP when getSnapshot returned incomplete data.
+    // Use /api/sync?force=1 for manual sheet edits.
   }
 
   return r;
