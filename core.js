@@ -1,4 +1,4 @@
-    'use strict';
+'use strict';
     /* ══════════════════════════════════════════════════════════
        STATE VARIABLES
     ══════════════════════════════════════════════════════════ */
@@ -831,7 +831,7 @@
       document.body.style.overflow = '';
     }
     function _signOut() {
-      try {_clearSession(); localStorage.removeItem('joolry_session_v1'); sessionStorage.clear();} catch (e) { }
+      try {_rcClear(true); _clearSession(); localStorage.removeItem('joolry_session_v1'); sessionStorage.clear();} catch (e) { }
       _U = null; _TOKEN = null;
       window._fkLoaded = false;
       document.documentElement.classList.remove('has-session');
@@ -1005,7 +1005,38 @@
     // ── RPC bridge → Vercel /api/rpc (same-origin, signed session token, no secrets in browser) ──
     // Reads (get*/validate*) are retried once on network failure. Writes are NEVER auto-retried
     // (a retry could create duplicate check-ins / tasks / payroll rows).
+    // ── Browser read-cache: repeat navigation costs 0 network calls. Writes clear it. ──
+    // STATIC = survives reload (localStorage). DYN = this tab only, short TTL. Key includes the user's email.
+    var _RC_STATIC = {getAllAppConfigForFrontend: 600, getHolidayList: 600, getTodayCelebrations: 600, getDoerList: 300, getEmployeeDirectory: 300};
+    var _RC_DYN = {getAnnouncements: 60, getAllData: 20, getBootData: 20, getDashboardStats: 20, getTodayTasks: 20, getWeeklyTasks: 20,
+      getDeptTasks: 20, getTaskHistory: 30, getMyDelegations: 20, getMyDelegatedOut: 20, getAllDelegations: 20, getLeaveBalance: 30,
+      getLeaveSummary: 30, getMusterGrid: 30, getMusterReport: 30, getEMDashboard: 30, getChecklistAnalyticsV2: 60,
+      getDelegationAnalyticsV2: 60, getAttendanceAnalyticsV2: 60, getAnalyticsSummaryV2: 60, getTopPerformers: 60, getPerformanceReport: 60};
+    var _RC_MEM = {};
+    function _rcKey(fn, args) {return 'jc:' + ((_U && _U.email) || '') + ':' + fn + ':' + JSON.stringify(args || []);}
+    function _rcGet(fn, args) {
+      var ttl = _RC_STATIC[fn] || _RC_DYN[fn]; if (!ttl) return null;
+      var k = _rcKey(fn, args), e = _RC_MEM[k];
+      if (!e && _RC_STATIC[fn]) {try {e = JSON.parse(localStorage.getItem(k) || 'null'); if (e) _RC_MEM[k] = e;} catch (x) { }}
+      return (e && Date.now() - e.t < ttl * 1000) ? e.j : null;
+    }
+    function _rcPut(fn, args, data) {
+      if (!(_RC_STATIC[fn] || _RC_DYN[fn])) return;
+      try {
+        var j = JSON.stringify(data); if (j.length > 400000) return;
+        var k = _rcKey(fn, args), e = {t: Date.now(), j: j}; _RC_MEM[k] = e;
+        if (_RC_STATIC[fn]) localStorage.setItem(k, JSON.stringify(e));
+      } catch (x) { }
+    }
+    function _rcClear(all) {
+      for (var k in _RC_MEM) {var f = k.split(':')[2]; if (all || !_RC_STATIC[f]) delete _RC_MEM[k];}
+      if (all) try {Object.keys(localStorage).forEach(function (k) {if (k.indexOf('jc:') === 0) localStorage.removeItem(k);});} catch (x) { }
+    }
     function _rpc(fn, args, timeout, onOk, onErr, tryNo) {
+      var _hit = _rcGet(fn, args);
+      if (_hit !== null && onOk) {setTimeout(function () {onOk(JSON.parse(_hit));}, 0); return;}
+      var _isW = !/^(get|validate)/.test(fn) && fn !== 'serverUptime';
+      if (_isW) _rcClear(false);
       _lbShow();
       var isRead = /^(get|validate)/.test(fn) || fn === 'serverUptime';
       var ctl = ('AbortController' in window) ? new AbortController() : null;
@@ -1028,7 +1059,10 @@
         }
         if (data && data.success === false && data.error) {
           if (onErr) onErr({message: data.error}); else _toast('Error: ' + data.error, 'err');
-        } else if (onOk) onOk(data);
+        } else {
+          if (_isW) _rcClear(false); else _rcPut(fn, args, data);
+          if (onOk) onOk(data);
+        }
       }).catch(function () {
         clearTimeout(tm); _lbHide();
         fail(isRead ? 'Network error. Check connection.' : 'Network error. Pehle check kar lo ki entry save hui ya nahi (Refresh), phir dobara karo.');
@@ -15148,3 +15182,6 @@
 
 
   
+
+/* Warm-up: wake Vercel function + Apps Script while the user is on the login screen */
+(function () {try {fetch('/api/rpc', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({fn: 'serverUptime', args: []})}).catch(function () { });} catch (e) { }})();
