@@ -31,7 +31,8 @@ const ALLOWED = new Set([
   'recordCheckIn', 'recordCheckOut', 'requestDateRevision', 'requestLeave',
   'requestRegularization', 'saveIncrementAppraisal', 'saveNewTask',
   'savePayroll', 'saveWeeklyCommitment', 'transferChecklistTask',
-  'updateCommitmentStatus', 'updateDelegationStatus', 'updateIncrementAppraisal',
+  'updateCommitmentStatus', 'updateDelegationStatus',
+  'updateEmployee', 'updateIncrementAppraisal',
   'updatePayrollStatus', 'validateGpsForAttendance',
   'getSnapshot'
 ]);
