@@ -13562,3 +13562,67 @@
   .hist-mob { display: none !important; }
 }
 
+
+/* ══════════════════════════════════════════════════════════════════════
+   DASHBOARD + EXPAND MOBILE POLISH
+══════════════════════════════════════════════════════════════════════ */
+@media (max-width: 767px) {
+  /* Dashboard spacing */
+  #content .krow {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 10px !important;
+    margin-bottom: 14px !important;
+  }
+  #content .kpi {
+    min-height: 100px !important;
+    padding: 14px 12px !important;
+  }
+  #content .kpi-val {
+    font-size: 22px !important;
+  }
+  #content .kpi-lbl {
+    font-size: 10px !important;
+  }
+  .dash-qa-grid {
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 8px !important;
+  }
+  .dash-qa-grid .qa-tile {
+    min-height: 78px !important;
+    padding: 10px 4px !important;
+  }
+  .qa-lbl {
+    font-size: 10px !important;
+    line-height: 1.25 !important;
+  }
+  .qa-icon {
+    width: 36px !important;
+    height: 36px !important;
+    font-size: 14px !important;
+  }
+  /* Hide desktop-only chart shells if any leak */
+  .dash-charts-row {
+    display: none !important;
+  }
+  /* Lower cards stack */
+  #content .card {
+    margin-bottom: 0 !important;
+  }
+}
+
+/* Expand/collapse touch targets */
+.ts-dept-hd,
+.ts-task-hd,
+.dcard .dc-top,
+[onclick*="Toggle"],
+[onclick*="toggle"] {
+  min-height: 44px;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+.ts-deact-btn {
+  position: relative;
+  z-index: 2;
+  pointer-events: auto !important;
+}
+
