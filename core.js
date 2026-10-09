@@ -3446,8 +3446,13 @@
           l._planDate = l.date || l.planned || l.plan_date || l.planned_date || l.Plan_Date || '';
           l._taskName = l.task_name || l.task || l.name || l.Task || l.Task_Name || '';
           l._freq = l.frequency || l.freq || l.Frequency || '';
-          l._planTime = l.scheduled_time || l.plan_time || l.planned_time || l.Plan_Time || l.day_label || '';
-          l._actual = l.actual_dt || l.actual || l.completed_at || l.done_at || l.Actual || l.Actual_Time || '';
+          l._planTime = l.scheduled_time || l.plan_time || l.planned_time || l.Plan_Time || l.Task_Time || l.task_time || '';
+          if (!l._planTime && l.day_label) {
+            var dl = String(l.day_label);
+            var tm = dl.match(/(\d{1,2}:\d{2}\s*(?:AM|PM|am|pm)?)/);
+            l._planTime = tm ? tm[1] : dl;
+          }
+          l._actual = l.actual_dt || l.actual || l.completed_at || l.done_at || l.Actual || l.Actual_Time || l.actual_time || '';
           l._remark = l.remark || l.remarks || l.completion_remarks || l.notes || l.Remark || '';
           l._emp = l.emp_name || l.employee || l.doer || l.Emp_Name || '';
           l._dept = l.dept || l.department || l.Dept || '';
@@ -3485,8 +3490,9 @@
           '</tr></thead><tbody>' +
           filtered.map(function (l) {
             var isDone = l.computed_status === 'Done';
-            var planTime = l._planTime;
-            var actTime = isDone && l._actual ? _tsShort(l._actual) : '';
+            var actTime = l._actual ? _tsShort(l._actual) : '';
+            var planTimeDisp = l._planTime || '';
+            if (planTimeDisp && planTimeDisp.length > 24) planTimeDisp = _tsShort(planTimeDisp) || planTimeDisp;
             return '<tr>' +
               '<td style="font-weight:700;white-space:nowrap">' + _fmtDate(l._planDate) + '</td>' +
               '<td style="min-width:140px">' + _esc(l._taskName) +
@@ -3494,7 +3500,7 @@
               '</td>' +
               '<td>' + _freqBadge(l._freq) + '</td>' +
               '<td>' + _statusBadge(isDone ? 'Done' : 'Pending') + '</td>' +
-              '<td style="color:var(--P);font-weight:600">' + (planTime ? '<i class="fas fa-calendar-clock"></i> ' + _esc(planTime) : '<span style="color:var(--tx3)">—</span>') + '</td>' +
+              '<td style="color:var(--P);font-weight:600">' + (planTimeDisp ? '<i class="fas fa-calendar-clock"></i> ' + _esc(planTimeDisp) : '<span style="color:var(--tx3)">—</span>') + '</td>' +
               '<td style="color:var(--G);font-weight:600">' + (actTime ? '<i class="fas fa-check-circle"></i> ' + actTime : '<span style="color:var(--tx3)">—</span>') + '</td>' +
               '<td style="color:var(--I);font-size:12px;max-width:180px">' + (l._remark ? '<i class="fas fa-comment-dots"></i> ' + _esc(l._remark) : '<span style="color:var(--tx3)">—</span>') + '</td>' +
               '</tr>';
@@ -3504,8 +3510,9 @@
           '<div class="hist-mob">' +
           filtered.map(function (l) {
             var isDone = l.computed_status === 'Done';
-            var planTime = l._planTime;
-            var actTime = isDone && l._actual ? _tsShort(l._actual) : '';
+            var planTime = l._planTime || '';
+            if (planTime && planTime.length > 24) planTime = _tsShort(planTime) || planTime;
+            var actTime = l._actual ? _tsShort(l._actual) : '';
             return '<div class="card card-nohover" style="padding:12px 14px;margin-bottom:8px">' +
               '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px">' +
               '<div style="font-weight:700;font-size:13px;flex:1;min-width:0;word-break:break-word">' + _esc(l._taskName) + '</div>' +
@@ -3580,7 +3587,20 @@
         tasks = tasks || [];
         var seen = {}; var allList = [];
         tasks.forEach(function (t) {
-          var uid = t.task_uid || t.uid || t.id || t.task_id || (t.task_name + '|' + (t.emp_id || ''));
+          // Normalize common backend / AppSheet field names
+          t.task_name = t.task_name || t.Task_Name || t.task || t.Task || t.name || '';
+          t.task_uid = t.task_uid || t.Task_UID || t.uid || t.UID || t.id || t.task_id || t.Task_ID || '';
+          t.emp_id = t.emp_id || t.Emp_ID || t.empId || t.employee_id || t.Employee_ID || t.doer_id || '';
+          t.emp_name = t.emp_name || t.Emp_Name || t.employee_name || t.Employee || t.doer_name || t.Doer || t.employee || '';
+          t.dept = t.dept || t.department || t.Dept || t.Department || t.dept_name || '';
+          t.frequency = t.frequency || t.Frequency || t.freq || t.Freq || 'D';
+          t.day_label = t.day_label || t.Day_Label || t.scheduled_time || t.Scheduled_Time || t.plan_time || t.Plan_Time || t.task_time || t.Task_Time || '';
+          t.start_date = t.start_date || t.Start_Date || t.start || '';
+          t.end_date = t.end_date || t.End_Date || t.end || '';
+          if (!t.task_uid) {
+            t.task_uid = (t.task_name + '|' + (t.emp_id || t.emp_name || '') + '|' + (t.frequency || '')).slice(0, 120);
+          }
+          var uid = t.task_uid;
           if (!seen[uid]) {seen[uid] = true; allList.push(t);}
         });
         if (!allList.length) {
@@ -4083,18 +4103,34 @@
 
 
     function _deactivateTask(uid) {
+      uid = (uid || '').trim();
+      if (!uid) {
+        _toast('Task UID missing — cannot delete. Reload Task Setup.', 'err');
+        return;
+      }
       _openModal(
         '<i class="fas fa-trash" style="color:var(--R)"></i> Deactivate Task',
-        '<p style="font-size:14px;color:var(--tx2);line-height:1.6">Remove this task from the recurring list? This cannot be undone. Future checklist rows will also be deleted.</p>',
+        '<p style="font-size:14px;color:var(--tx2);line-height:1.6">Remove this task from the recurring list? This cannot be undone. Future checklist rows will also be deleted.</p>' +
+        '<div style="margin-top:8px;font-size:11px;color:var(--tx3)">UID: <code style="word-break:break-all">' + _esc(uid) + '</code></div>',
         function () {
           _closeModal();
-          // ← Loading toast
           _toast('<i class="fas fa-circle-notch fa-spin"></i> Deleting task...', 'info');
           _gasX('deactivateTask', [uid], 30000, function (r) {
-            _toast('✓ Task deleted — ' + (r.checklistRowsDeleted || 0) + ' checklist rows removed', 'ok');
+            if (r && r.success === false) {
+              _toast('❌ ' + (r.error || 'Delete failed'), 'err');
+              return;
+            }
+            _toast('✓ Task deleted — ' + ((r && r.checklistRowsDeleted) || 0) + ' checklist rows removed', 'ok');
+            // clear local list entry immediately
+            if (window._tsAllTasks) {
+              window._tsAllTasks = window._tsAllTasks.filter(function (x) {
+                return (x.task_uid || x.uid || '') !== uid;
+              });
+              _tsApplyFilter();
+            }
             _loadSetupTasks();
           }, function (e) {
-            _toast('Error: ' + e.message, 'err');
+            _toast('Error: ' + ((e && e.message) || 'Delete failed'), 'err');
           });
         },
         '<i class="fas fa-trash"></i> Deactivate'
@@ -5288,13 +5324,13 @@
               '<option value="WO"' + (r.status === 'WO' || r.status === 'Week Off' ? ' selected' : '') + '>Week Off</option>' +
               '<option value="PTO"' + (r.status === 'PTO' ? ' selected' : '') + '>PTO</option>' +
               '</select>' +
-              '<button id="mb_' + r.emp_id + '" class="tam-btn" onclick="_tamMark1(\'' + _esc(r.emp_id) + '\',\'' + _esc(r.name) + '\',\'' + _esc(d) + '\')" style="padding:6px 14px;border-radius:8px;background:#d97706;color:#fff;font-size:12px;font-weight:800;border:none;cursor:pointer;white-space:nowrap"><i class="fas fa-sign-out-alt"></i> Mark OUT</button>'
+              '<button id="mb_' + r.emp_id + '" class="tam-btn" onclick="_tamMark1(\'' + _esc(r.emp_id) + '\',\'' + _esc(r.name) + '\',\'' + _esc(d) + '\')" style="padding:6px 14px;border-radius:8px;background:#d97706;color:#fff;font-size:12px;font-weight:800;border:none;cursor:pointer;white-space:nowrap"><i class="fas fa-sign-out-alt"></i> Mark OUT</button>' + '<button type="button" class="tam-btn" onclick="_tamEdit(\'' + _esc(r.emp_id) + '\',\'' + _esc(r.name) + '\',\'' + _esc(d) + '\')" style="padding:6px 10px;border-radius:8px;background:var(--sur);color:var(--P);font-size:12px;font-weight:700;border:1.5px solid var(--bdr);cursor:pointer"><i class="fas fa-pen"></i></button>'
               : '<input type="time" id="ti_' + r.emp_id + '" value="' + curTime + '" class="tam-time" style="padding:5px 8px;border-radius:8px;border:1.5px solid var(--bdr);background:var(--bg);font-size:12px;color:var(--tx);min-width:100px" title="Check-in">' +
               '<input type="time" id="to_' + r.emp_id + '" class="tam-time" style="padding:5px 8px;border-radius:8px;border:1.5px solid var(--bdr);background:var(--bg);font-size:12px;color:var(--tx);min-width:100px" title="Check-out">' +
               '<select id="st_' + r.emp_id + '" class="tam-sel" style="padding:5px 8px;border-radius:8px;border:1.5px solid var(--bdr);background:var(--bg);font-size:12px;color:var(--tx)">' +
               '<option value="P">Present</option><option value="HD">Half Day</option><option value="A">Absent</option><option value="WO">Week Off</option><option value="PTO">PTO</option>' +
               '</select>' +
-              '<button id="mb_' + r.emp_id + '" class="tam-btn" onclick="_tamMark1(\'' + _esc(r.emp_id) + '\',\'' + _esc(r.name) + '\',\'' + _esc(d) + '\')" style="padding:6px 14px;border-radius:8px;background:var(--G);color:#fff;font-size:12px;font-weight:800;border:none;cursor:pointer;white-space:nowrap"><i class="fas fa-check"></i> Mark</button>'
+              '<button id="mb_' + r.emp_id + '" class="tam-btn" onclick="_tamMark1(\'' + _esc(r.emp_id) + '\',\'' + _esc(r.name) + '\',\'' + _esc(d) + '\')" style="padding:6px 14px;border-radius:8px;background:var(--G);color:#fff;font-size:12px;font-weight:800;border:none;cursor:pointer;white-space:nowrap"><i class="fas fa-check"></i> Mark</button>' + '<button type="button" class="tam-btn" onclick="_tamEdit(\'' + _esc(r.emp_id) + '\',\'' + _esc(r.name) + '\',\'' + _esc(d) + '\')" style="padding:6px 10px;border-radius:8px;background:var(--sur);color:var(--P);font-size:12px;font-weight:700;border:1.5px solid var(--bdr);cursor:pointer;margin-left:4px"><i class="fas fa-pen"></i></button>'
             ) +
             '</div></div>';
         }).join('');
@@ -5388,6 +5424,61 @@
             : '<i class="fas fa-check"></i> Mark';
         }
       });
+    }
+
+
+    function _tamEdit(empId, empName, dept) {
+      var inEl = document.getElementById('ti_' + empId);
+      var outEl = document.getElementById('to_' + empId);
+      var stEl = document.getElementById('st_' + empId);
+      var curIn = inEl ? inEl.value : '';
+      var curOut = outEl ? outEl.value : '';
+      var curSt = stEl ? stEl.value : 'P';
+      var dateVal = _teamAttDate || _today();
+      _openModal(
+        '<i class="fas fa-pen" style="color:var(--P)"></i> Edit Attendance — ' + _esc(empName),
+        '<div style="display:flex;flex-direction:column;gap:12px">' +
+        '<div><label style="font-size:11px;font-weight:800;color:var(--tx2);text-transform:uppercase;display:block;margin-bottom:4px">Date</label>' +
+        '<input type="date" id="tamEditDate" class="ana-sel" value="' + dateVal + '" style="width:100%"></div>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
+        '<div><label style="font-size:11px;font-weight:800;color:var(--tx2);text-transform:uppercase;display:block;margin-bottom:4px">Check-in</label>' +
+        '<input type="time" id="tamEditIn" class="ana-sel" value="' + _esc(curIn) + '" style="width:100%"></div>' +
+        '<div><label style="font-size:11px;font-weight:800;color:var(--tx2);text-transform:uppercase;display:block;margin-bottom:4px">Check-out</label>' +
+        '<input type="time" id="tamEditOut" class="ana-sel" value="' + _esc(curOut) + '" style="width:100%"></div>' +
+        '</div>' +
+        '<div><label style="font-size:11px;font-weight:800;color:var(--tx2);text-transform:uppercase;display:block;margin-bottom:4px">Status</label>' +
+        '<select id="tamEditSt" class="ana-sel" style="width:100%">' +
+        ['P|Present','HD|Half Day','A|Absent','WO|Week Off','PTO|PTO'].map(function (x) {
+          var p = x.split('|');
+          return '<option value="' + p[0] + '"' + (curSt === p[0] ? ' selected' : '') + '>' + p[1] + '</option>';
+        }).join('') +
+        '</select></div>' +
+        '<div style="font-size:11px;color:var(--tx3)"><i class="fas fa-info-circle"></i> Management can update today or any back date.</div>' +
+        '</div>',
+        function () {
+          var dt = (document.getElementById('tamEditDate') || {}).value || dateVal;
+          var inT = (document.getElementById('tamEditIn') || {}).value || '';
+          var outT = (document.getElementById('tamEditOut') || {}).value || '';
+          var st = (document.getElementById('tamEditSt') || {}).value || 'P';
+          _closeModal();
+          _toast('Saving ' + empName + '…', 'info');
+          _gas('markStaffAttendance', [[{
+            emp_id: empId, emp_name: empName, dept: dept,
+            date: dt, check_in: inT, check_out: outT, status: st
+          }]], function () {
+            _toast('✓ Attendance updated for ' + empName, 'ok');
+            if (typeof _loadTeamAtt === 'function') {
+              // keep selected date if filter exists
+              var dateInp = document.getElementById('tamDate') || document.getElementById('cmtDate');
+              _teamAttDate = dt;
+              _loadTeamAtt();
+            }
+          }, function (e) {
+            _toast('Error: ' + ((e && e.message) || 'Save failed'), 'err');
+          });
+        },
+        '<i class="fas fa-save"></i> Save Attendance'
+      );
     }
 
     function _tamMarkAll() {
@@ -14476,7 +14567,9 @@
               '<td style="font-size:12px;color:var(--tx2)">' + _esc(e.email || '—') + '</td>' +
               '<td style="font-size:12px;color:var(--tx2)">' + (e.phone ? '<a href="tel:' + _esc(e.phone) + '" onclick="event.stopPropagation()" style="color:var(--P)"><i class="fas fa-phone" style="font-size:10px"></i> ' + _esc(e.phone) + '</a>' : '<span style="color:var(--tx3)">—</span>') + '</td>' +
               '<td style="text-align:center">' + (e.overdue_delegations > 0 ? '<span style="color:var(--R);font-weight:800">' + e.overdue_delegations + '</span>' : '<span style="color:var(--tx3)">—</span>') + '</td>' +
-              '<td><button class="btn btn-xs btn-outline" onclick="event.stopPropagation();_loadEmpDetail(\'' + _esc(e.emp_id) + '\')"><i class="fas fa-chart-bar"></i></button></td>' +
+              '<td style="white-space:nowrap">' +
+              (_isManager() ? '<button class="btn btn-xs btn-outline" onclick="event.stopPropagation();_editEmployee(\'' + _esc(e.emp_id) + '\')" title="Edit"><i class="fas fa-pen"></i></button> ' : '') +
+              '<button class="btn btn-xs btn-outline" onclick="event.stopPropagation();_loadEmpDetail(\'' + _esc(e.emp_id) + '\')" title="Performance"><i class="fas fa-chart-bar"></i></button></td>' +
               '</tr>';
           }).join('') + '</tbody></table></div></div>';
         return;
@@ -14510,6 +14603,7 @@
             '<div class="ed-card-foot">' +
             '<button class="btn btn-xs btn-outline" onclick="event.stopPropagation();_copyText(\'' + _esc(e.email) + '\')"><i class="fas fa-copy"></i> Email</button>' +
             (e.phone ? '<a class="btn btn-xs btn-outline" href="tel:' + _esc(e.phone) + '" onclick="event.stopPropagation()" style="text-decoration:none"><i class="fas fa-phone"></i> Call</a>' : '') +
+            (_isManager() ? '<button class="btn btn-xs btn-outline" onclick="event.stopPropagation();_editEmployee(\'' + _esc(e.emp_id) + '\')"><i class="fas fa-pen"></i> Edit</button>' : '') +
             (_isManager() ? '<button class="btn btn-xs" style="background:var(--Pl);color:var(--P)" onclick="event.stopPropagation();_loadEmpDetail(\'' + _esc(e.emp_id) + '\')"><i class="fas fa-chart-bar"></i> Stats</button>' : '') +
             '</div>' +
             '</div>';
@@ -14542,7 +14636,81 @@
       _toast('Exported!', 'ok');
     }
 
-    function _loadEmpDetail(empId) {
+    
+    function _editEmployee(empId) {
+      if (!_isManager()) { _toast('Only management can edit', 'warn'); return; }
+      var emps = _D.empDir || [];
+      var e = null;
+      for (var i = 0; i < emps.length; i++) {
+        if (String(emps[i].emp_id) === String(empId)) { e = emps[i]; break; }
+      }
+      if (!e) {
+        _gas('getEmployeeDirectory', [], function (list) {
+          _D.empDir = list || [];
+          _editEmployee(empId);
+        }, function () { _toast('Could not load employee', 'err'); });
+        return;
+      }
+      _openModal(
+        '<i class="fas fa-pen" style="color:var(--P)"></i> Edit Employee',
+        '<div style="display:flex;flex-direction:column;gap:12px">' +
+        '<div style="text-align:center">' + _avatarEl(e.name, e.photo, 64) +
+        '<div style="font-size:11px;color:var(--tx3);margin-top:6px">Emp ID: ' + _esc(e.emp_id) + '</div></div>' +
+        '<div><label style="font-size:11px;font-weight:800;color:var(--tx2);text-transform:uppercase;display:block;margin-bottom:4px">Full Name</label>' +
+        '<input type="text" id="edName" class="ana-sel" value="' + _esc(e.name || '') + '" style="width:100%"></div>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
+        '<div><label style="font-size:11px;font-weight:800;color:var(--tx2);text-transform:uppercase;display:block;margin-bottom:4px">Department</label>' +
+        '<input type="text" id="edDept" class="ana-sel" value="' + _esc(e.dept || '') + '" style="width:100%"></div>' +
+        '<div><label style="font-size:11px;font-weight:800;color:var(--tx2);text-transform:uppercase;display:block;margin-bottom:4px">Role</label>' +
+        '<select id="edRole" class="ana-sel" style="width:100%">' +
+        ['OWNER','MANAGER','HR','STAFF','COORDINATOR'].map(function (r) {
+          return '<option value="' + r + '"' + ((e.role || '').toUpperCase() === r ? ' selected' : '') + '>' + r + '</option>';
+        }).join('') +
+        '</select></div></div>' +
+        '<div><label style="font-size:11px;font-weight:800;color:var(--tx2);text-transform:uppercase;display:block;margin-bottom:4px">Email</label>' +
+        '<input type="email" id="edEmail" class="ana-sel" value="' + _esc(e.email || '') + '" style="width:100%"></div>' +
+        '<div><label style="font-size:11px;font-weight:800;color:var(--tx2);text-transform:uppercase;display:block;margin-bottom:4px">Phone</label>' +
+        '<input type="text" id="edPhone" class="ana-sel" value="' + _esc(e.phone || '') + '" style="width:100%"></div>' +
+        '<div><label style="font-size:11px;font-weight:800;color:var(--tx2);text-transform:uppercase;display:block;margin-bottom:4px">Photo URL</label>' +
+        '<input type="text" id="edPhoto" class="ana-sel" value="' + _esc(e.photo || '') + '" placeholder="https://..." style="width:100%"></div>' +
+        '</div>',
+        function () {
+          var payload = {
+            emp_id: e.emp_id,
+            name: ((document.getElementById('edName') || {}).value || '').trim(),
+            dept: ((document.getElementById('edDept') || {}).value || '').trim(),
+            role: ((document.getElementById('edRole') || {}).value || 'STAFF').trim(),
+            email: ((document.getElementById('edEmail') || {}).value || '').trim(),
+            phone: ((document.getElementById('edPhone') || {}).value || '').trim(),
+            photo: ((document.getElementById('edPhoto') || {}).value || '').trim()
+          };
+          if (!payload.name) { _toast('Name required', 'warn'); return; }
+          _closeModal();
+          _toast('Saving…', 'info');
+          _gas('updateEmployee', [payload], function (r) {
+            if (r && r.success === false) {
+              _toast('❌ ' + (r.error || 'Update failed'), 'err');
+              return;
+            }
+            _toast('✓ Employee updated', 'ok');
+            // refresh local cache
+            for (var k = 0; k < (_D.empDir || []).length; k++) {
+              if (String(_D.empDir[k].emp_id) === String(e.emp_id)) {
+                _D.empDir[k] = Object.assign({}, _D.empDir[k], payload);
+                break;
+              }
+            }
+            if (typeof _loadEmpDir === 'function') _loadEmpDir();
+            else if (typeof _vEmpDir === 'function') _vEmpDir();
+          }, function (err) {
+            _toast('Error: ' + ((err && err.message) || 'Update failed — check GAS updateEmployee'), 'err');
+          });
+        },
+        '<i class="fas fa-save"></i> Save Changes'
+      );
+    }
+
+function _loadEmpDetail(empId) {
       if (!_isManager()) return;
       var modal = document.getElementById('modal');
       if (modal) modal.className = 'modal-box wide';
