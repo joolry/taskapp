@@ -3434,24 +3434,22 @@
       tblEl.innerHTML = _skel(3);
 
       var empCode = (_U && (_U.emp_code || _U.emp_id || _U.user_id)) || '';
-      _gas('getTaskHistory', [empCode, from, to], function (logs) {
+
+      function renderHist(logs, planMap) {
+        planMap = planMap || {};
         if (logs && !Array.isArray(logs)) {
           logs = logs.logs || logs.rows || logs.data || logs.tasks || logs.history || [];
         }
         logs = logs || [];
-        _D.histLogs = logs;
 
-        // Normalize + status (getTaskHistory returns date/actual_dt already normed yyyy-MM-dd)
         logs.forEach(function (l) {
           var rawDate = l.date || l.planned || l.plan_date || '';
-          // keep only date portion — strip time if present
           l._planDate = String(rawDate).slice(0, 10);
           l._taskName = l.task_name || l.task || l.name || '';
           l._freq = l.frequency || l.freq || '';
-          l._planTime = ''; // history API has no plan time column
+          l._planTime = planMap[l.task_uid] || planMap[l._taskName] || l.scheduled_time || l.plan_time || '';
           var rawAct = l.actual_dt || l.actual || l.completed_at || '';
           l._actual = rawAct ? String(rawAct) : '';
-          // if actual is date-only equal to plan, don't treat as timestamp mess
           l._remark = l.remark || l.remarks || '';
           l._emp = l.emp_name || '';
           l._dept = l.dept || '';
@@ -3461,7 +3459,8 @@
           else if (hasActual) l.computed_status = 'Done';
           else l.computed_status = 'Pending';
         });
-        // Deduplicate same task+date rows (Checklist + bad Today merge)
+
+        // Deduplicate same task+date
         var seenKey = {};
         logs = logs.filter(function (l) {
           var k = (l._planDate || '') + '|' + (l._taskName || '') + '|' + (l.task_uid || l.log_id || '');
@@ -3472,8 +3471,8 @@
         _D.histLogs = logs;
 
         var filtered = logs.slice();
-        if (st === 'Done') filtered = filtered.filter(function (l) {return l.computed_status === 'Done';});
-        if (st === 'Pending') filtered = filtered.filter(function (l) {return l.computed_status === 'Pending';});
+        if (st === 'Done') filtered = filtered.filter(function (l) { return l.computed_status === 'Done'; });
+        if (st === 'Pending') filtered = filtered.filter(function (l) { return l.computed_status === 'Pending'; });
         if (freq) filtered = filtered.filter(function (l) {
           var f = String(l._freq || '').toUpperCase();
           return f === freq.toUpperCase() || f.charAt(0) === freq.charAt(0).toUpperCase();
@@ -3489,7 +3488,6 @@
           '<span>' + filtered.length + ' records</span>' +
           '<button class="btn btn-outline btn-xs" onclick="_exportHistory()"><i class="fas fa-download"></i> Export CSV</button>' +
           '</div>' +
-          // Desktop table
           '<div class="table-card hist-desk"><div class="tw"><table><thead><tr>' +
           '<th>Plan Date</th><th>Task</th><th>Freq</th><th>Status</th>' +
           '<th style="color:var(--P)"><i class="fas fa-calendar-clock"></i> Plan Time</th>' +
@@ -3510,11 +3508,10 @@
               '<td>' + _statusBadge(isDone ? 'Done' : 'Pending') + '</td>' +
               '<td style="color:var(--P);font-weight:600">' + (planTimeDisp ? '<i class="fas fa-calendar-clock"></i> ' + _esc(planTimeDisp) : '<span style="color:var(--tx3)">—</span>') + '</td>' +
               '<td style="color:var(--G);font-weight:600">' + (actTime ? '<i class="fas fa-check-circle"></i> ' + actTime : '<span style="color:var(--tx3)">—</span>') + '</td>' +
-              '<td style="color:var(--I);font-size:12px;max-width:180px">' + (l._remark ? '<i class="fas fa-comment-dots"></i> ' + _esc(l._remark) : '<span style="color:var(--tx3)">—</span>') + '</td>' +
+              '<td style="max-width:180px;font-size:12px;color:var(--tx2)">' + (l._remark ? _esc(l._remark) : '<span style="color:var(--tx3)">—</span>') + '</td>' +
               '</tr>';
           }).join('') +
           '</tbody></table></div></div>' +
-          // Mobile cards
           '<div class="hist-mob">' +
           filtered.map(function (l) {
             var isDone = l.computed_status === 'Done';
@@ -3539,9 +3536,35 @@
               '</div>';
           }).join('') +
           '</div>';
-      }, function (e) {
-        tblEl.innerHTML = (e && e.message && e.message.indexOf('Network') > -1) ? '<div style="text-align:center;padding:24px"><div style="font-size:28px;margin-bottom:8px">📡</div><div style="font-weight:700;color:var(--tx);margin-bottom:4px">Connection Error</div><div style="font-size:12px;color:var(--tx2);margin-bottom:12px">Server se connect nahi ho pa raha</div><button class="btn btn-sm" onclick="_forceRefresh()"><i class="fas fa-rotate-right"></i> Retry</button></div>' : '<div class="te">' + _esc(e.message) + '</div>';
-      });
+      }
+
+      function fetchHist(planMap) {
+        _gas('getTaskHistory', [empCode, from, to], function (logs) {
+          renderHist(logs, planMap);
+        }, function (e) {
+          tblEl.innerHTML = (e && e.message && e.message.indexOf('Network') > -1)
+            ? '<div style="text-align:center;padding:24px"><div style="font-size:28px;margin-bottom:8px">📡</div><div style="font-weight:700;color:var(--tx);margin-bottom:4px">Connection Error</div><div style="font-size:12px;color:var(--tx2);margin-bottom:12px">Server se connect nahi ho pa raha</div><button class="btn btn-sm" onclick="_forceRefresh()"><i class="fas fa-rotate-right"></i> Retry</button></div>'
+            : '<div class="te">' + _esc(e.message) + '</div>';
+        });
+      }
+
+      // Load plan times from Task List then history
+      if (window._histPlanMap && Object.keys(window._histPlanMap).length) {
+        fetchHist(window._histPlanMap);
+      } else {
+        _gas('getDeptTasks', ['All', _today()], function (tasks) {
+          var map = {};
+          (tasks || []).forEach(function (t) {
+            var label = t.day_label || t.day_date || t.day_val || '';
+            if (t.task_uid && label) map[t.task_uid] = label;
+            if (t.task_name && label) map[t.task_name] = label;
+          });
+          window._histPlanMap = map;
+          fetchHist(map);
+        }, function () {
+          fetchHist({});
+        });
+      }
     }
 
     function _exportHistory() {
@@ -3594,23 +3617,17 @@
         }
         tasks = tasks || [];
         var seen = {}; var allList = [];
-        tasks.forEach(function (t) {
-          // Normalize common backend / AppSheet field names
+        tasks.forEach(function (t, idx) {
           t.task_name = t.task_name || t.Task_Name || t.task || t.Task || t.name || '';
-          t.task_uid = t.task_uid || t.Task_UID || t.uid || t.UID || t.id || t.task_id || t.Task_ID || '';
-          t.emp_id = t.emp_id || t.Emp_ID || t.empId || t.employee_id || t.Employee_ID || t.doer_id || '';
-          t.emp_name = t.emp_name || t.Emp_Name || t.employee_name || t.Employee || t.doer_name || t.Doer || t.employee || '';
-          t.dept = t.dept || t.department || t.Dept || t.Department || t.dept_name || '';
-          t.frequency = t.frequency || t.Frequency || t.freq || t.Freq || 'D';
-          t.day_label = t.day_label || t.day_val || t.Day_Label || t.scheduled_time || t.Scheduled_Time || t.plan_time || t.Plan_Time || t.task_time || t.Task_Time || '';
-          t.day_val = t.day_val || t.day_label || '';
-          t.start_date = t.start_date || t.Start_Date || t.start || '';
-          t.end_date = t.end_date || t.End_Date || t.end || '';
-          if (!t.task_uid) {
-            t.task_uid = (t.task_name + '|' + (t.emp_id || t.emp_name || '') + '|' + (t.frequency || '')).slice(0, 120);
-          }
-          var uid = t.task_uid;
-          if (!seen[uid]) {seen[uid] = true; allList.push(t);}
+          t.task_uid = String(t.task_uid || t.Task_UID || t.uid || t.UID || t.id || t.task_id || '').trim();
+          t.emp_id = String(t.emp_id || t.Emp_ID || t.empId || t.doer_id || '').trim();
+          t.emp_name = t.emp_name || t.Emp_Name || t.employee_name || t.Doer || t.doer_name || '';
+          t.dept = t.dept || t.department || t.Dept || t.Department || '';
+          t.frequency = t.frequency || t.Frequency || t.freq || 'D';
+          t.day_label = t.day_label || t.day_date || t.day_val || '';
+          // Deduplicate only on real Setup Task ID; keep rows with empty uid separately
+          var uid = t.task_uid || ('__row_' + idx);
+          if (!seen[uid]) { seen[uid] = true; allList.push(t); }
         });
         if (!allList.length) {
           el2.innerHTML = '<div class="empty-state"><i class="fas fa-tasks"></i><h4>No Active Tasks</h4><p>Add a task using the form above.</p></div>';
@@ -3627,12 +3644,11 @@
           ? '<div style="text-align:center;padding:24px"><div style="font-size:28px;margin-bottom:8px">📡</div><div style="font-weight:700;color:var(--tx);margin-bottom:4px">Connection Error</div><button class="btn btn-sm" onclick="_loadSetupTasks()"><i class="fas fa-rotate-right"></i> Retry</button></div>'
           : '<div class="te">' + _esc((e && e.message) || 'Error') + '</div>';
       }
-      // Official source: Task List via getTaskSetup (Setup Task ID, Doer Name, etc.)
-      _gas('getTaskSetup', [''], function (tasks) {
+      // Match working dailyapp: getDeptTasks from Task List (full fields + day_label)
+      _gas('getDeptTasks', ['All', _today()], function (tasks) {
         _setupRenderTasks(tasks);
       }, function (e1) {
-        // fallback older API
-        _gas('getDeptTasks', ['All', ''], function (t2) {
+        _gas('getTaskSetup', [''], function (t2) {
           _setupRenderTasks(t2);
         }, function (e2) {
           _setupLoadErr(e1 || e2);
@@ -4129,45 +4145,29 @@
 
 
     function _deactivateTask(uid) {
-      uid = (uid || '').trim();
-      if (!uid) {
-        _toast('Task UID missing — cannot delete. Reload Task Setup.', 'err');
+      uid = String(uid || '').trim();
+      if (!uid || uid.indexOf('__row_') === 0) {
+        _toast('Task UID missing — cannot delete this row', 'err');
         return;
       }
       _openModal(
         '<i class="fas fa-trash" style="color:var(--R)"></i> Deactivate Task',
         '<p style="font-size:14px;color:var(--tx2);line-height:1.6">Remove this task from the recurring list? This cannot be undone. Future checklist rows will also be deleted.</p>' +
-        '<div style="margin-top:8px;font-size:11px;color:var(--tx3)">UID: <code style="word-break:break-all">' + _esc(uid) + '</code></div>',
+        '<div style="margin-top:8px;font-size:11px;color:var(--tx3)">UID: <code>' + _esc(uid) + '</code></div>',
         function () {
           _closeModal();
           _toast('<i class="fas fa-circle-notch fa-spin"></i> Deleting task...', 'info');
-          function _afterDelete(msg) {
-            _toast(msg || '✓ Task deleted', 'ok');
+          _gasX('deactivateTask', [uid], 30000, function (r) {
+            _toast('✓ Task deleted — ' + ((r && r.checklistRowsDeleted) || 0) + ' checklist rows removed', 'ok');
             if (window._tsAllTasks) {
               window._tsAllTasks = window._tsAllTasks.filter(function (x) {
-                return String(x.task_uid || x.uid || '') !== String(uid);
+                return String(x.task_uid || '') !== uid;
               });
               _tsApplyFilter();
             }
             _loadSetupTasks();
-          }
-          _gasX('deactivateTask', [uid], 30000, function (r) {
-            if (r && r.success === false) {
-              // try soft-delete API
-              _gasX('portalDeleteTask', [uid], 30000, function () {
-                _afterDelete('✓ Task deactivated');
-              }, function (e2) {
-                _toast('❌ ' + (r.error || (e2 && e2.message) || 'Delete failed'), 'err');
-              });
-              return;
-            }
-            _afterDelete('✓ Task deleted — ' + ((r && (r.checklistRowsDeleted || r.todayDeleted)) || 0) + ' checklist rows removed');
           }, function (e) {
-            _gasX('portalDeleteTask', [uid], 30000, function () {
-              _afterDelete('✓ Task deactivated');
-            }, function (e2) {
-              _toast('Error: ' + ((e && e.message) || (e2 && e2.message) || 'Delete failed'), 'err');
-            });
+            _toast('Error: ' + ((e && e.message) || 'Delete failed'), 'err');
           });
         },
         '<i class="fas fa-trash"></i> Deactivate'
@@ -5152,7 +5152,9 @@
     function _loadTeamAtt() {
       var root = document.getElementById('amteamRoot');
       if (!root) return;
-      _teamAttDate = _today();
+      // Preserve selected date (Edit may set back-date); fall back to date input or today
+      var existingDate = (document.getElementById('tamDate') || {}).value || _teamAttDate || _today();
+      _teamAttDate = existingDate || _today();
 
       // Render the stable frame (filter bar + stat strip + list container)
       var curTime = _nowTime();
@@ -5370,6 +5372,7 @@
               '</select>' +
               '<button id="mb_' + r.emp_id + '" class="tam-btn" onclick="_tamMark1(\'' + _esc(r.emp_id) + '\',\'' + _esc(r.name) + '\',\'' + _esc(d) + '\')" style="padding:6px 14px;border-radius:8px;background:var(--G);color:#fff;font-size:12px;font-weight:800;border:none;cursor:pointer;white-space:nowrap"><i class="fas fa-check"></i> Mark</button>' + '<button type="button" class="tam-btn" onclick="_tamEdit(\'' + _esc(r.emp_id) + '\',\'' + _esc(r.name) + '\',\'' + _esc(d) + '\')" style="padding:6px 10px;border-radius:8px;background:var(--sur);color:var(--P);font-size:12px;font-weight:700;border:1.5px solid var(--bdr);cursor:pointer;margin-left:4px"><i class="fas fa-pen"></i></button>'
             ) +
+            '<button type="button" class="tam-btn" onclick="_tamEdit(\'' + _esc(r.emp_id) + '\',\'' + _esc(r.name) + '\',\'' + _esc(d) + '\',\'' + _esc(r.check_in || '') + '\',\'' + _esc(r.check_out || '') + '\',\'' + _esc(r.status || 'P') + '\')" style="padding:6px 10px;border-radius:8px;background:var(--sur);color:var(--P);font-size:12px;font-weight:700;border:1.5px solid var(--bdr);cursor:pointer" title="Edit attendance"><i class="fas fa-pen"></i> Edit</button>' +
             '</div></div>';
         }).join('');
 
@@ -14572,12 +14575,14 @@
     function _loadEmpDir() {
       var el = document.getElementById('edGrid');
       if (!el) return;
-      if (_D.empDir && _D.empDir.length) {_renderEmpDir(_D.empDir); return;}
-      el.innerHTML = _skel(6);
+      // Soft show cache while refreshing
+      if (_D.empDir && _D.empDir.length) { _renderEmpDir(_D.empDir); }
+      else { el.innerHTML = _skel(6); }
       _gas('getEmployeeDirectory', [], function (emps) {
+        if (emps && !Array.isArray(emps)) emps = emps.employees || emps.data || emps.rows || [];
         _D.empDir = emps || [];
-        _renderEmpDir(emps);
-      }, function (e) {if (el) el.innerHTML = (e && e.message && e.message.indexOf('Network') > -1) ? '<div style="text-align:center;padding:24px"><div style="font-size:28px;margin-bottom:8px">📡</div><div style="font-weight:700;color:var(--tx);margin-bottom:4px">Connection Error</div><div style="font-size:12px;color:var(--tx2);margin-bottom:12px">Server se connect nahi ho pa raha</div><button class="btn btn-sm" onclick="_forceRefresh()"><i class="fas fa-rotate-right"></i> Retry</button></div>' : '<div class="te">' + _esc(e.message) + '</div>';});
+        _renderEmpDir(_D.empDir);
+      }, function (e) {if (el && !(_D.empDir && _D.empDir.length)) el.innerHTML = (e && e.message && e.message.indexOf('Network') > -1) ? '<div style="text-align:center;padding:24px"><div style="font-size:28px;margin-bottom:8px">📡</div><div style="font-weight:700;color:var(--tx);margin-bottom:4px">Connection Error</div><div style="font-size:12px;color:var(--tx2);margin-bottom:12px">Server se connect nahi ho pa raha</div><button class="btn btn-sm" onclick="_forceRefresh()"><i class="fas fa-rotate-right"></i> Retry</button></div>' : '<div class="te">' + _esc(e.message) + '</div>';});
     }
 
     function _renderEmpDir(emps) {
@@ -14736,17 +14741,20 @@
               return;
             }
             _toast('✓ Employee updated', 'ok');
-            // refresh local cache
             for (var k = 0; k < (_D.empDir || []).length; k++) {
               if (String(_D.empDir[k].emp_id) === String(e.emp_id)) {
                 _D.empDir[k] = Object.assign({}, _D.empDir[k], payload);
                 break;
               }
             }
-            if (typeof _loadEmpDir === 'function') _loadEmpDir();
-            else if (typeof _vEmpDir === 'function') _vEmpDir();
+            _D.empDir = null; // force refresh
+            _loadEmpDir();
           }, function (err) {
-            _toast('Error: ' + ((err && err.message) || 'Update failed — check GAS updateEmployee'), 'err');
+            var msg = (err && err.message) || 'Update failed';
+            if (msg.indexOf('not found') > -1 || msg.indexOf('Unknown') > -1 || msg.indexOf('not allowed') > -1) {
+              msg = 'GAS me updateEmployee function missing hai — Code.gs me paste karo (UPDATE_EMPLOYEE.gs)';
+            }
+            _toast('Error: ' + msg, 'err');
           });
         },
         '<i class="fas fa-save"></i> Save Changes'
