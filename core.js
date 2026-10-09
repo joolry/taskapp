@@ -3175,12 +3175,19 @@
 
     function _cmtToggle(uid) {
       var b = document.getElementById(uid), ic = document.getElementById('cmti_' + uid);
-      if (!b) return; var open = b.classList.toggle('adm-open');
+      if (!b) return;
+      var open = b.classList.toggle('adm-open');
+      b.style.display = open ? 'block' : 'none';
       if (ic) ic.className = 'fas fa-chevron-' + (open ? 'down' : 'right') + ' fa-fw';
     }
     function _cmtExpandAll(exp) {
-      document.querySelectorAll('#cmtList .adm-body').forEach(function (b) {b.classList.toggle('adm-open', exp);});
-      document.querySelectorAll('#cmtList [id^="cmti_"]').forEach(function (i) {i.className = 'fas fa-chevron-' + (exp ? 'down' : 'right') + ' fa-fw';});
+      document.querySelectorAll('#cmtList .adm-body').forEach(function (b) {
+        if (exp) { b.classList.add('adm-open'); b.style.display = 'block'; }
+        else { b.classList.remove('adm-open'); b.style.display = 'none'; }
+      });
+      document.querySelectorAll('#cmtList [id^="cmti_"]').forEach(function (i) {
+        i.className = 'fas fa-chevron-' + (exp ? 'down' : 'right') + ' fa-fw';
+      });
     }
     function _cmtSort(key) {
       if (_cmtSort.key === key) {_cmtSort.dir *= -1;} else {_cmtSort.key = key; _cmtSort.dir = 1;}
@@ -3426,40 +3433,43 @@
       if (!tblEl) return;
       tblEl.innerHTML = _skel(3);
 
-      _gas('getTaskHistory', [_U.emp_code, from, to], function (logs) {
+      var empCode = (_U && (_U.emp_code || _U.emp_id || _U.user_id)) || '';
+      _gas('getTaskHistory', [empCode, from, to], function (logs) {
+        if (logs && !Array.isArray(logs)) {
+          logs = logs.logs || logs.rows || logs.data || logs.tasks || logs.history || [];
+        }
+        logs = logs || [];
         _D.histLogs = logs;
 
-        // Status: actual filled = Done; else Pending (support field name variants)
+        // Normalize + status
         logs.forEach(function (l) {
-          var hasPlanned = !!(l.date || l.planned || l.plan_date || l.planned_date);
-          var hasActual = !!(l.actual_dt || l.actual || l.completed_at || l.done_at);
-          var st = (l.status || l.computed_status || '').toString().toLowerCase();
-          if (st === 'done' || st === 'completed') l.computed_status = 'Done';
+          l._planDate = l.date || l.planned || l.plan_date || l.planned_date || l.Plan_Date || '';
+          l._taskName = l.task_name || l.task || l.name || l.Task || l.Task_Name || '';
+          l._freq = l.frequency || l.freq || l.Frequency || '';
+          l._planTime = l.scheduled_time || l.plan_time || l.planned_time || l.Plan_Time || l.day_label || '';
+          l._actual = l.actual_dt || l.actual || l.completed_at || l.done_at || l.Actual || l.Actual_Time || '';
+          l._remark = l.remark || l.remarks || l.completion_remarks || l.notes || l.Remark || '';
+          l._emp = l.emp_name || l.employee || l.doer || l.Emp_Name || '';
+          l._dept = l.dept || l.department || l.Dept || '';
+          var hasActual = !!(l._actual && String(l._actual).trim() && String(l._actual) !== '-');
+          var stRaw = (l.status || l.computed_status || '').toString().toLowerCase();
+          if (stRaw === 'done' || stRaw === 'completed') l.computed_status = 'Done';
           else if (hasActual) l.computed_status = 'Done';
           else l.computed_status = 'Pending';
         });
 
-        var filtered = logs;
+        var filtered = logs.slice();
         if (st === 'Done') filtered = filtered.filter(function (l) {return l.computed_status === 'Done';});
         if (st === 'Pending') filtered = filtered.filter(function (l) {return l.computed_status === 'Pending';});
-        if (freq) filtered = filtered.filter(function (l) {return l.frequency === freq;});
+        if (freq) filtered = filtered.filter(function (l) {
+          var f = String(l._freq || '').toUpperCase();
+          return f === freq.toUpperCase() || f.charAt(0) === freq.charAt(0).toUpperCase();
+        });
 
         if (!filtered.length) {
           tblEl.innerHTML = '<div class="te"><i class="fas fa-search"></i>No records found matching your filters</div>';
           return;
         }
-
-        // Normalize field names from backend variants
-        filtered.forEach(function (l) {
-          l._planDate = l.date || l.planned || l.plan_date || l.planned_date || '';
-          l._taskName = l.task_name || l.task || l.name || '';
-          l._freq = l.frequency || l.freq || '';
-          l._planTime = l.scheduled_time || l.plan_time || l.planned_time || '';
-          l._actual = l.actual_dt || l.actual || l.completed_at || l.done_at || '';
-          l._remark = l.remark || l.remarks || l.completion_remarks || l.notes || '';
-          l._emp = l.emp_name || l.employee || l.doer || '';
-          l._dept = l.dept || l.department || '';
-        });
 
         tblEl.innerHTML =
           '<div class="export-bar"><i class="fas fa-table"></i>' +
@@ -3734,50 +3744,62 @@
               '<span style="padding:2px 7px;border-radius:6px;font-size:10px;font-weight:800;background:var(--sur2);color:' + fClr + ';">' + _esc(t.frequency || 'D') + '</span>' +
               '<i class="fas fa-chevron-down tc" style="color:var(--tx3);font-size:10px;transition:transform .2s;flex-shrink:0"></i>' +
               '</div>' +
-              '<div id="' + taskId + '" style="display:none;padding:10px 12px;border-top:1px solid var(--bdr);background:var(--sur2)">' +
-              '<div style="font-size:11px;color:var(--tx2);margin-bottom:8px;display:flex;gap:12px;flex-wrap:wrap">' +
-              '<span><i class="fas fa-id-badge"></i> ' + _esc(t.emp_id) + '</span>' +
-              '<span><i class="fas fa-building"></i> ' + _esc(t.dept) + '</span>' +
-              '<span><i class="fas fa-repeat"></i> ' + _esc(t.frequency) + '</span>' +
-              (planLabel
-                ? '<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:7px;background:var(--Pl);color:var(--P);font-weight:800">' +
-                '<i class="fas fa-calendar-clock" style="font-size:10px"></i> Planned: ' + planLabel + '</span>'
-                : '') +
+              '<div id="' + taskId + '" style="display:none;padding:12px 14px;border-top:1px solid var(--bdr);background:var(--sur2)">' +
+              '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 14px;font-size:11.5px;color:var(--tx2);margin-bottom:10px">' +
+              '<div><span style="color:var(--tx3);font-weight:700">Employee</span><div style="font-weight:700;color:var(--tx)">' + _esc(t.emp_name || t.emp_id || '—') + '</div></div>' +
+              '<div><span style="color:var(--tx3);font-weight:700">Emp ID</span><div style="font-weight:700;color:var(--tx)">' + _esc(t.emp_id || '—') + '</div></div>' +
+              '<div><span style="color:var(--tx3);font-weight:700">Department</span><div style="font-weight:700;color:var(--tx)">' + _esc(t.dept || t.department || '—') + '</div></div>' +
+              '<div><span style="color:var(--tx3);font-weight:700">Frequency</span><div style="font-weight:700;color:var(--tx)">' + _esc(t.frequency || '—') + '</div></div>' +
+              '<div><span style="color:var(--tx3);font-weight:700">Plan Time</span><div style="font-weight:700;color:var(--P)">' + (planLabel || '—') + '</div></div>' +
+              '<div><span style="color:var(--tx3);font-weight:700">Task UID</span><div style="font-weight:600;color:var(--tx3);word-break:break-all;font-size:10px">' + _esc(t.task_uid || t.uid || '—') + '</div></div>' +
+              (t.start_date || t.Start_Date ? '<div><span style="color:var(--tx3);font-weight:700">Start</span><div style="font-weight:700">' + _esc(_fmtDate(t.start_date || t.Start_Date)) + '</div></div>' : '') +
+              (t.end_date || t.End_Date ? '<div><span style="color:var(--tx3);font-weight:700">End</span><div style="font-weight:700">' + _esc(_fmtDate(t.end_date || t.End_Date)) + '</div></div>' : '') +
               '</div>' +
-              '<button class="btn btn-red btn-xs ts-deact-btn" data-uid="' + _esc(t.task_uid) + '" style="margin-top:2px"><i class="fas fa-trash-alt"></i> Deactivate</button>' +
+              '<button type="button" class="btn btn-red btn-xs ts-deact-btn" data-uid="' + _esc(t.task_uid || t.uid || '') + '" style="margin-top:4px"><i class="fas fa-trash-alt"></i> Deactivate Task</button>' +
               '</div></div>';
           }).join('') +
           '</div></div>';
       }).join('');
 
-      // Delegate click handlers for dept headers and task headers (no inline onclick)
-      grpEl.addEventListener('click', function (e) {
-        var dh = e.target.closest('.ts-dept-hd');
-        if (dh) {
-          var gid2 = dh.getAttribute('data-gid');
-          var body = document.getElementById(gid2);
-          if (body) {
-            var open = body.style.display !== 'none';
-            body.style.display = open ? 'none' : '';
-            var gc = dh.querySelector('.gc');
-            if (gc) gc.style.transform = open ? '' : 'rotate(180deg)';
+      // Single delegated handler on stable parent (prevents stacked listeners)
+      var root = document.getElementById('setupTaskList');
+      if (root && !root._tsBound) {
+        root._tsBound = true;
+        root.addEventListener('click', function (e) {
+          var db = e.target.closest('.ts-deact-btn');
+          if (db) {
+            e.preventDefault(); e.stopPropagation();
+            var uid = db.getAttribute('data-uid') || '';
+            if (uid) _deactivateTask(uid);
+            return;
           }
-          return;
-        }
-        var th = e.target.closest('.ts-task-hd');
-        if (th) {
-          var tid = th.getAttribute('data-tid');
-          var detail = document.getElementById(tid);
-          if (detail) {
-            var open2 = detail.style.display !== 'none';
-            detail.style.display = open2 ? 'none' : '';
-            var tc = th.querySelector('.tc');
-            if (tc) tc.style.transform = open2 ? '' : 'rotate(180deg)';
+          var dh = e.target.closest('.ts-dept-hd');
+          if (dh) {
+            e.preventDefault();
+            var gid2 = dh.getAttribute('data-gid');
+            var body = document.getElementById(gid2);
+            if (body) {
+              var open = body.style.display !== 'none';
+              body.style.display = open ? 'none' : '';
+              var gc = dh.querySelector('.gc');
+              if (gc) gc.style.transform = open ? '' : 'rotate(180deg)';
+            }
+            return;
           }
-        }
-        var db = e.target.closest('.ts-deact-btn');
-        if (db) {_deactivateTask(db.getAttribute('data-uid'));}
-      }, {once: false});
+          var th = e.target.closest('.ts-task-hd');
+          if (th) {
+            e.preventDefault();
+            var tid = th.getAttribute('data-tid');
+            var detail = document.getElementById(tid);
+            if (detail) {
+              var open2 = detail.style.display !== 'none';
+              detail.style.display = open2 ? 'none' : '';
+              var tc = th.querySelector('.tc');
+              if (tc) tc.style.transform = open2 ? '' : 'rotate(180deg)';
+            }
+          }
+        });
+      }
     }
 
 
@@ -3902,26 +3924,23 @@
 
 
     function _setupExpandAll(expand) {
-      // Preserve scroll position in content area
       var ct = document.getElementById('content');
       var scrollY = ct ? ct.scrollTop : 0;
-      // Expand/collapse all dept groups
-      document.querySelectorAll('[id^="stg_"]').forEach(function (g) {
+      // Dept groups
+      document.querySelectorAll('#setupTaskList [id^="stg_"]').forEach(function (g) {
         g.style.display = expand ? '' : 'none';
       });
-      // Expand/collapse all task details
-      document.querySelectorAll('#setupTaskList .tc').forEach(function (c) {
+      document.querySelectorAll('#setupTaskList .ts-dept-hd .gc').forEach(function (c) {
         c.style.transform = expand ? 'rotate(180deg)' : '';
       });
-      if (expand) {
-        document.querySelectorAll('#setupTaskList [style*="display:none"]').forEach(function (el) {
-          if (!el.id || !el.id.startsWith('stg_')) el.style.display = '';
-        });
-      }
-      // Restore scroll position after DOM change
-      requestAnimationFrame(function () {
-        if (ct) ct.scrollTop = scrollY;
+      // Task detail panels (id starts with tsi_)
+      document.querySelectorAll('#setupTaskList [id^="tsi_"]').forEach(function (d) {
+        d.style.display = expand ? '' : 'none';
       });
+      document.querySelectorAll('#setupTaskList .ts-task-hd .tc').forEach(function (c) {
+        c.style.transform = expand ? 'rotate(180deg)' : '';
+      });
+      requestAnimationFrame(function () { if (ct) ct.scrollTop = scrollY; });
     }
 
     function _csEmpChg(sel) {
@@ -4585,19 +4604,23 @@
       var body = card.querySelector('.dc-body');
       var chev = card.querySelector('.dc-chev');
       if (!body) return;
-      var collapsed = body.style.display === 'none';
-      body.style.display = collapsed ? '' : 'none';
-      if (chev) chev.style.transform = collapsed ? 'rotate(180deg)' : '';
+      var isHidden = body.style.display === 'none' || getComputedStyle(body).display === 'none';
+      body.style.display = isHidden ? 'block' : 'none';
+      if (chev) chev.style.transform = isHidden ? 'rotate(180deg)' : '';
     }
 
     function _delegExpandAll(expand) {
       document.querySelectorAll('[id^="dlg_grp_"]').forEach(function (g) {
-        g.style.display = expand ? '' : 'none';
+        g.style.display = expand ? 'block' : 'none';
         var ic = document.getElementById('dgc_' + g.id);
         if (ic) ic.style.transform = expand ? 'rotate(180deg)' : '';
       });
-      document.querySelectorAll('.dcard .dc-body').forEach(function (b) {b.style.display = expand ? '' : 'none';});
-      document.querySelectorAll('.dcard .dc-chev').forEach(function (c) {c.style.transform = expand ? 'rotate(180deg)' : '';});
+      document.querySelectorAll('.dcard .dc-body').forEach(function (b) {
+        b.style.display = expand ? 'block' : 'none';
+      });
+      document.querySelectorAll('.dcard .dc-chev').forEach(function (c) {
+        c.style.transform = expand ? 'rotate(180deg)' : '';
+      });
     }
 
     function _dMgrComplete(btn) {
@@ -14761,10 +14784,6 @@
         '<div class="card card-nohover" style="text-align:center;padding-bottom:20px" id="profCard">' + _skel(3) + '</div>' +
         '</div>' +
         '<div>' +
-        '<div class="card card-nohover" style="margin-bottom:16px">' +
-        '<div class="sec-title" style="margin-bottom:14px"><i class="fas fa-chart-line" style="color:var(--P)"></i> Task History (Last 12 Weeks)</div>' +
-        '<div style="height:200px"><canvas id="profileHistChart"></canvas></div>' +
-        '</div>' +
         '<div class="card card-nohover">' +
         '<div class="sec-title" style="margin-bottom:14px"><i class="fas fa-lock" style="color:var(--V)"></i> Change Password</div>' +
         '<div class="frow">' +
