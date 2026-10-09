@@ -5349,7 +5349,7 @@
               (r.check_in ? '<span style="font-size:12px;font-weight:700;color:var(--G)"><i class="fas fa-arrow-right-to-bracket"></i> ' + _esc(r.check_in) + '</span>' : '') +
               (r.check_out ? '<span style="font-size:12px;font-weight:700;color:var(--R)"><i class="fas fa-arrow-right-from-bracket"></i> ' + _esc(r.check_out) + '</span>' : '') +
               '<i class="fas fa-circle-check" style="color:var(--G);font-size:14px"></i>' +
-              '<button type="button" class="tam-btn" onclick="_tamEdit('' + _esc(r.emp_id) + '','' + _esc(r.name) + '','' + _esc(d) + '','' + _esc(r.check_in || '') + '','' + _esc(r.check_out || '') + '','' + _esc(r.status || 'P') + '')" style="padding:6px 10px;border-radius:8px;background:var(--sur);color:var(--P);font-size:12px;font-weight:700;border:1.5px solid var(--bdr);cursor:pointer;margin-left:6px"><i class="fas fa-pen"></i> Edit</button>'
+              '<button type="button" class="tam-btn" onclick="_tamEdit(\'' + _esc(r.emp_id) + '\',\'' + _esc(r.name) + '\',\'' + _esc(d) + '\',\'' + _esc(r.check_in || '') + '\',\'' + _esc(r.check_out || '') + '\',\'' + _esc(r.status || 'P') + '\')" style="padding:6px 10px;border-radius:8px;background:var(--sur);color:var(--P);font-size:12px;font-weight:700;border:1.5px solid var(--bdr);cursor:pointer;margin-left:6px"><i class="fas fa-pen"></i> Edit</button>'
               : marked && r.needs_checkout
               ? '<span style="padding:4px 10px;border-radius:20px;font-size:11px;font-weight:800;background:#fef3c7;color:#d97706">OUT pending</span>' +
               (r.check_in ? '<span style="font-size:12px;font-weight:700;color:var(--G)"><i class="fas fa-arrow-right-to-bracket"></i> ' + _esc(r.check_in) + '</span>' : '') +
