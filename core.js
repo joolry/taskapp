@@ -3441,27 +3441,35 @@
         logs = logs || [];
         _D.histLogs = logs;
 
-        // Normalize + status
+        // Normalize + status (getTaskHistory returns date/actual_dt already normed yyyy-MM-dd)
         logs.forEach(function (l) {
-          l._planDate = l.date || l.planned || l.plan_date || l.planned_date || l.Plan_Date || '';
-          l._taskName = l.task_name || l.task || l.name || l.Task || l.Task_Name || '';
-          l._freq = l.frequency || l.freq || l.Frequency || '';
-          l._planTime = l.scheduled_time || l.plan_time || l.planned_time || l.Plan_Time || l.Task_Time || l.task_time || '';
-          if (!l._planTime && l.day_label) {
-            var dl = String(l.day_label);
-            var tm = dl.match(/(\d{1,2}:\d{2}\s*(?:AM|PM|am|pm)?)/);
-            l._planTime = tm ? tm[1] : dl;
-          }
-          l._actual = l.actual_dt || l.actual || l.completed_at || l.done_at || l.Actual || l.Actual_Time || l.actual_time || '';
-          l._remark = l.remark || l.remarks || l.completion_remarks || l.notes || l.Remark || '';
-          l._emp = l.emp_name || l.employee || l.doer || l.Emp_Name || '';
-          l._dept = l.dept || l.department || l.Dept || '';
-          var hasActual = !!(l._actual && String(l._actual).trim() && String(l._actual) !== '-');
-          var stRaw = (l.status || l.computed_status || '').toString().toLowerCase();
+          var rawDate = l.date || l.planned || l.plan_date || '';
+          // keep only date portion — strip time if present
+          l._planDate = String(rawDate).slice(0, 10);
+          l._taskName = l.task_name || l.task || l.name || '';
+          l._freq = l.frequency || l.freq || '';
+          l._planTime = ''; // history API has no plan time column
+          var rawAct = l.actual_dt || l.actual || l.completed_at || '';
+          l._actual = rawAct ? String(rawAct) : '';
+          // if actual is date-only equal to plan, don't treat as timestamp mess
+          l._remark = l.remark || l.remarks || '';
+          l._emp = l.emp_name || '';
+          l._dept = l.dept || '';
+          var stRaw = (l.status || '').toString().toLowerCase();
+          var hasActual = !!(l._actual && l._actual !== '-' && l._actual.slice(0, 10) !== '1899-12-30');
           if (stRaw === 'done' || stRaw === 'completed') l.computed_status = 'Done';
           else if (hasActual) l.computed_status = 'Done';
           else l.computed_status = 'Pending';
         });
+        // Deduplicate same task+date rows (Checklist + bad Today merge)
+        var seenKey = {};
+        logs = logs.filter(function (l) {
+          var k = (l._planDate || '') + '|' + (l._taskName || '') + '|' + (l.task_uid || l.log_id || '');
+          if (seenKey[k]) return false;
+          seenKey[k] = true;
+          return true;
+        });
+        _D.histLogs = logs;
 
         var filtered = logs.slice();
         if (st === 'Done') filtered = filtered.filter(function (l) {return l.computed_status === 'Done';});
@@ -3594,7 +3602,8 @@
           t.emp_name = t.emp_name || t.Emp_Name || t.employee_name || t.Employee || t.doer_name || t.Doer || t.employee || '';
           t.dept = t.dept || t.department || t.Dept || t.Department || t.dept_name || '';
           t.frequency = t.frequency || t.Frequency || t.freq || t.Freq || 'D';
-          t.day_label = t.day_label || t.Day_Label || t.scheduled_time || t.Scheduled_Time || t.plan_time || t.Plan_Time || t.task_time || t.Task_Time || '';
+          t.day_label = t.day_label || t.day_val || t.Day_Label || t.scheduled_time || t.Scheduled_Time || t.plan_time || t.Plan_Time || t.task_time || t.Task_Time || '';
+          t.day_val = t.day_val || t.day_label || '';
           t.start_date = t.start_date || t.Start_Date || t.start || '';
           t.end_date = t.end_date || t.End_Date || t.end || '';
           if (!t.task_uid) {
@@ -3618,14 +3627,16 @@
           ? '<div style="text-align:center;padding:24px"><div style="font-size:28px;margin-bottom:8px">📡</div><div style="font-weight:700;color:var(--tx);margin-bottom:4px">Connection Error</div><button class="btn btn-sm" onclick="_loadSetupTasks()"><i class="fas fa-rotate-right"></i> Retry</button></div>'
           : '<div class="te">' + _esc((e && e.message) || 'Error') + '</div>';
       }
-      // Prefer full active list (empty/null date); fallback to today snapshot
-      _gas('getDeptTasks', ['All', ''], function (tasks) {
-        var arr = tasks;
-        if (arr && !Array.isArray(arr)) arr = arr.tasks || arr.data || arr.rows || [];
-        if (arr && arr.length) { _setupRenderTasks(tasks); return; }
-        _gas('getDeptTasks', ['All', _today()], function (t2) { _setupRenderTasks(t2); }, _setupLoadErr);
-      }, function () {
-        _gas('getDeptTasks', ['All', _today()], function (t2) { _setupRenderTasks(t2); }, _setupLoadErr);
+      // Official source: Task List via getTaskSetup (Setup Task ID, Doer Name, etc.)
+      _gas('getTaskSetup', [''], function (tasks) {
+        _setupRenderTasks(tasks);
+      }, function (e1) {
+        // fallback older API
+        _gas('getDeptTasks', ['All', ''], function (t2) {
+          _setupRenderTasks(t2);
+        }, function (e2) {
+          _setupLoadErr(e1 || e2);
+        });
       });
     }
 
@@ -3732,19 +3743,34 @@
             var taskId = 'tsi_' + _esc(t.task_uid);
             // day_label from backend: "8 Aug 2026 2:00 PM" (new), "Monday · 2:00 PM" (weekly),
             // "8 of month · 2:00 PM" (monthly), or old ISO "2026-03-31T18:30:00.000Z"
-            var rawLabel = t.day_label || '';
+            var rawLabel = t.day_label || t.day_val || '';
             var planLabel = '';
             if (rawLabel) {
-              // Old ISO format — extract time only
-              if (rawLabel.indexOf('T') > 0 && rawLabel.match(/^\d{4}-\d{2}-\d{2}T/)) {
-                var pdOld = _parseAnyDate(rawLabel);
-                if (pdOld && !isNaN(pdOld)) {
+              var rs = String(rawLabel).trim();
+              // Corrupted GAS Date.toString with 1899 — take time only
+              if (rs.indexOf('1899') >= 0 || /GMT/i.test(rs)) {
+                var gm = rs.match(/(\d{1,2}):(\d{2})(?::\d{2})?/);
+                if (gm) {
+                  var gh = +gm[1], gmi = +gm[2];
+                  planLabel = (gh % 12 || 12) + ':' + (gmi < 10 ? '0' : '') + gmi + (gh >= 12 ? ' PM' : ' AM');
+                }
+              } else if (rs.indexOf('T') > 0 && /^\d{4}-\d{2}-\d{2}T/.test(rs)) {
+                var pdOld = _parseAnyDate(rs);
+                if (pdOld && !isNaN(pdOld.getTime())) {
                   var ph = pdOld.getHours(), pm2 = pdOld.getMinutes();
                   planLabel = (ph % 12 || 12) + ':' + (pm2 < 10 ? '0' : '') + pm2 + (ph >= 12 ? ' PM' : ' AM');
                 }
+              } else if (/^\d{1,2}\/\d{1,2}\/\d{4}/.test(rs)) {
+                // dd/MM/yyyy HH:mm:ss — show time part
+                var tm = rs.match(/(\d{1,2}):(\d{2})/);
+                if (tm) {
+                  var th = +tm[1], tmi = +tm[2];
+                  planLabel = (th % 12 || 12) + ':' + (tmi < 10 ? '0' : '') + tmi + (th >= 12 ? ' PM' : ' AM');
+                } else {
+                  planLabel = rs;
+                }
               } else {
-                // All other formats: "8 Aug 2026 2:00 PM", "Monday · 2:00 PM" — show as-is
-                planLabel = rawLabel;
+                planLabel = rs;
               }
             }
             planLabel = planLabel ? _esc(planLabel) : '';
@@ -4115,22 +4141,33 @@
         function () {
           _closeModal();
           _toast('<i class="fas fa-circle-notch fa-spin"></i> Deleting task...', 'info');
-          _gasX('deactivateTask', [uid], 30000, function (r) {
-            if (r && r.success === false) {
-              _toast('❌ ' + (r.error || 'Delete failed'), 'err');
-              return;
-            }
-            _toast('✓ Task deleted — ' + ((r && r.checklistRowsDeleted) || 0) + ' checklist rows removed', 'ok');
-            // clear local list entry immediately
+          function _afterDelete(msg) {
+            _toast(msg || '✓ Task deleted', 'ok');
             if (window._tsAllTasks) {
               window._tsAllTasks = window._tsAllTasks.filter(function (x) {
-                return (x.task_uid || x.uid || '') !== uid;
+                return String(x.task_uid || x.uid || '') !== String(uid);
               });
               _tsApplyFilter();
             }
             _loadSetupTasks();
+          }
+          _gasX('deactivateTask', [uid], 30000, function (r) {
+            if (r && r.success === false) {
+              // try soft-delete API
+              _gasX('portalDeleteTask', [uid], 30000, function () {
+                _afterDelete('✓ Task deactivated');
+              }, function (e2) {
+                _toast('❌ ' + (r.error || (e2 && e2.message) || 'Delete failed'), 'err');
+              });
+              return;
+            }
+            _afterDelete('✓ Task deleted — ' + ((r && (r.checklistRowsDeleted || r.todayDeleted)) || 0) + ' checklist rows removed');
           }, function (e) {
-            _toast('Error: ' + ((e && e.message) || 'Delete failed'), 'err');
+            _gasX('portalDeleteTask', [uid], 30000, function () {
+              _afterDelete('✓ Task deactivated');
+            }, function (e2) {
+              _toast('Error: ' + ((e && e.message) || (e2 && e2.message) || 'Delete failed'), 'err');
+            });
           });
         },
         '<i class="fas fa-trash"></i> Deactivate'
@@ -5311,7 +5348,8 @@
                 (stLbl === '—' ? 'Done' : stLbl) + '</span>' +
               (r.check_in ? '<span style="font-size:12px;font-weight:700;color:var(--G)"><i class="fas fa-arrow-right-to-bracket"></i> ' + _esc(r.check_in) + '</span>' : '') +
               (r.check_out ? '<span style="font-size:12px;font-weight:700;color:var(--R)"><i class="fas fa-arrow-right-from-bracket"></i> ' + _esc(r.check_out) + '</span>' : '') +
-              '<i class="fas fa-circle-check" style="color:var(--G);font-size:14px"></i>'
+              '<i class="fas fa-circle-check" style="color:var(--G);font-size:14px"></i>' +
+              '<button type="button" class="tam-btn" onclick="_tamEdit('' + _esc(r.emp_id) + '','' + _esc(r.name) + '','' + _esc(d) + '','' + _esc(r.check_in || '') + '','' + _esc(r.check_out || '') + '','' + _esc(r.status || 'P') + '')" style="padding:6px 10px;border-radius:8px;background:var(--sur);color:var(--P);font-size:12px;font-weight:700;border:1.5px solid var(--bdr);cursor:pointer;margin-left:6px"><i class="fas fa-pen"></i> Edit</button>'
               : marked && r.needs_checkout
               ? '<span style="padding:4px 10px;border-radius:20px;font-size:11px;font-weight:800;background:#fef3c7;color:#d97706">OUT pending</span>' +
               (r.check_in ? '<span style="font-size:12px;font-weight:700;color:var(--G)"><i class="fas fa-arrow-right-to-bracket"></i> ' + _esc(r.check_in) + '</span>' : '') +
@@ -5427,13 +5465,18 @@
     }
 
 
-    function _tamEdit(empId, empName, dept) {
+    function _tamEdit(empId, empName, dept, prefIn, prefOut, prefSt) {
       var inEl = document.getElementById('ti_' + empId);
       var outEl = document.getElementById('to_' + empId);
       var stEl = document.getElementById('st_' + empId);
-      var curIn = inEl ? inEl.value : '';
-      var curOut = outEl ? outEl.value : '';
-      var curSt = stEl ? stEl.value : 'P';
+      var curIn = (inEl && inEl.value) || prefIn || '';
+      var curOut = (outEl && outEl.value) || prefOut || '';
+      var curSt = (stEl && stEl.value) || prefSt || 'P';
+      // normalize status codes
+      if (curSt === 'Present') curSt = 'P';
+      if (curSt === 'Half Day') curSt = 'HD';
+      if (curSt === 'Absent') curSt = 'A';
+      if (curSt === 'Week Off') curSt = 'WO';
       var dateVal = _teamAttDate || _today();
       _openModal(
         '<i class="fas fa-pen" style="color:var(--P)"></i> Edit Attendance — ' + _esc(empName),
