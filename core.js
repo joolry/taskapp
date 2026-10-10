@@ -153,7 +153,7 @@
     // navigation), shows a spinner, then reloads current view
     function _forceRefresh() {
       var cur = window._curView || 'dash';
-      // Clear in-memory cache for non-static data + all Checklist SWR keys
+      // Clear in-memory + localStorage cache (all Checklist SWR keys too)
       delete _D.dashStats; delete _D.todayAtt; delete _D.todayTasks;
       delete _D.announcements; delete _D.myDelegations; delete _D.myAtt;
       delete _D.lastFetch;
@@ -164,17 +164,34 @@
       window._tsAllTasks = null;
       _D.lastFetch = null;
       _lcClear();
-      // Instant UI: reload current view; snapshot/GAS will refill caches
-      _gas('getDashboardStatsFresh', [], function (d) {
-        if (d) {
-          if (d.dashStats) _D.dashStats = d.dashStats;
-          if (d.todayAtt) _D.todayAtt = d.todayAtt;
-          if (d.announcements) _D.announcements = d.announcements;
-          if (d.myDelegations) _D.myDelegations = d.myDelegations;
-          _D.lastFetch = Date.now();
+      try { _toast('<i class="fas fa-rotate-right fa-spin"></i> Syncing latest…', 'info'); } catch (e) {}
+      // 1) Ask server to rebuild SNAPSHOT from sheets (realtime)
+      // 2) Then reload current view from fresh snap (instant after sync)
+      _gasX('clientForceSync', [], 45000, function (d) {
+        if (d && d.dashStats) _D.dashStats = d.dashStats;
+        if (d && d.todayAtt) _D.todayAtt = d.todayAtt;
+        if (d && d.announcements) _D.announcements = d.announcements;
+        if (d && d.myDelegations) _D.myDelegations = d.myDelegations;
+        if (d && d.todayTasks) {
+          _D.todayTasks = d.todayTasks;
+          _D._ckTodayKey = String((_U && _U.emp_code) || '') + '|' + _today();
         }
+        _D.lastFetch = Date.now();
+        try { _lcSave(); } catch (e2) {}
         _loadV(cur);
-      }, function () {_loadV(cur);});
+      }, function () {
+        // Fallback: still reload view (will use whatever snap is available)
+        _gas('getDashboardStatsFresh', [], function (d) {
+          if (d) {
+            if (d.dashStats) _D.dashStats = d.dashStats;
+            if (d.todayAtt) _D.todayAtt = d.todayAtt;
+            if (d.announcements) _D.announcements = d.announcements;
+            if (d.myDelegations) _D.myDelegations = d.myDelegations;
+            _D.lastFetch = Date.now();
+          }
+          _loadV(cur);
+        }, function () {_loadV(cur);});
+      });
     }
     // Cache control: auto-disabled on desktop (>1024px), user can override
     var _cacheOk = (function () {
@@ -228,15 +245,19 @@
     /* ══════════════════════════════════════════════════════════
        DATE / UTILITY HELPERS
     ══════════════════════════════════════════════════════════ */
+    // IST calendar date helpers (UTC+5:30) — never use toISOString() alone (UTC day shift)
+    function _istNow() {
+      return new Date(Date.now() + 19800000);
+    }
     function _today() {
-      return new Date().toISOString().slice(0, 10);
+      return _istNow().toISOString().slice(0, 10);
     }
     function _currMonth() {
-      return new Date().toISOString().slice(0, 7);
+      return _istNow().toISOString().slice(0, 7);
     }
     function _daysLater(n) {
-      var d = new Date();
-      d.setDate(d.getDate() + n);
+      var d = _istNow();
+      d.setUTCDate(d.getUTCDate() + n);
       return d.toISOString().slice(0, 10);
     }
     // ── Universal date/time normalizer ─────────────────────────────────────
@@ -2847,8 +2868,8 @@
         '<select id="cmtDept" class="ana-sel" style="min-width:130px"><option value="all">All Departments</option></select>' +
         '<select id="cmtEmpFilter" class="ana-sel" style="min-width:140px"><option value="all">All Employees</option>' + _getEmpOptions() + '</select>' +
         '<select id="cmtStatus" class="ana-sel" style="min-width:120px">' +
+        '<option value="all" selected>All Tasks</option>' +
         '<option value="pending">Pending Only</option>' +
-        '<option value="all">All Tasks</option>' +
         '<option value="Done">Done</option>' +
         '</select>' +
         '<input type="text" id="cmtSearch" class="ana-sel" placeholder="Search name / task…" style="min-width:140px">' +
@@ -2912,7 +2933,7 @@
 
       var dept = (document.getElementById('cmtDept') || {}).value || 'all';
       var empFlt = (document.getElementById('cmtEmpFilter') || {}).value || 'all';
-      var stFlt = (document.getElementById('cmtStatus') || {}).value || 'pending';
+      var stFlt = (document.getElementById('cmtStatus') || {}).value || 'all';
       var q = ((document.getElementById('cmtSearch') || {}).value || '').toLowerCase().trim();
 
       var rows = _cmtData.filter(function (r) {
@@ -3329,8 +3350,7 @@
         }, '<i class="fas fa-forward"></i> Shift');
     }
     function _tomorrow() {
-      var d = new Date(); d.setDate(d.getDate() + 1);
-      return d.getFullYear() + '-' + (d.getMonth() < 9 ? '0' : '') + (d.getMonth() + 1) + '-' + (d.getDate() < 10 ? '0' : '') + d.getDate();
+      return _daysLater(1);
     }
 
     function _ctodayForm() {
@@ -14358,16 +14378,16 @@
       return _fmtDate(ts.substring(0, 10));
     }
 
-    /* Return today as "YYYY-MM-DD" */
-    function _today() {return new Date().toISOString().slice(0, 10);}
+    /* Return today as "YYYY-MM-DD" (IST) — keep in sync with helpers above */
+    function _today() { return _istNow().toISOString().slice(0, 10); }
 
-    /* Return "YYYY-MM" for current month */
-    function _currMonth() {return new Date().toISOString().slice(0, 7);}
+    /* Return "YYYY-MM" for current month (IST) */
+    function _currMonth() { return _istNow().toISOString().slice(0, 7); }
 
-    /* Return "YYYY-MM-DD" for n days ago */
+    /* Return "YYYY-MM-DD" for n days ago (IST) */
     function _daysAgo(n) {
-      var d = new Date();
-      d.setDate(d.getDate() - n);
+      var d = _istNow();
+      d.setUTCDate(d.getUTCDate() - n);
       return d.toISOString().slice(0, 10);
     }
 
