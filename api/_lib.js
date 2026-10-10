@@ -397,18 +397,35 @@ function applyWritePatch(fn, clientArgs, gasResult, email) {
 
     if (fn === 'saveNewTask' && gasResult && gasResult.success !== false) {
       const o = clientArgs[0] || {};
+      const freq = String(o.frequency || o.freq || 'D');
+      const sd = String(o.start_date || '').slice(0, 10);
+      const tm = String(o.task_time || String(o.start_date || '').slice(11, 16) || '').slice(0, 5);
+      const dm = sd.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      // Same Day/Date text Code.gs writes to the Task List: "dd/MM/yyyy HH:mm:ss"
+      const dayDate = (dm && tm.indexOf(':') > 0) ? dm[3] + '/' + dm[2] + '/' + dm[1] + ' ' + tm + ':00' : String(o.day_date || o.scheduled_time || '');
+      const DN = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      let weekDay = String(o.week_day || ''), monthDay = String(o.month_day || '');
+      if (!weekDay && ['W', 'E1st', 'E2nd', 'E3rd', 'E4th', 'ELast'].indexOf(freq) > -1) {
+        const dow = o.day_of_week !== undefined ? Number(o.day_of_week) : (dm ? new Date(Date.UTC(+dm[1], +dm[2] - 1, +dm[3], 12)).getUTCDay() : -1);
+        weekDay = DN[dow] || '';
+      }
+      if (!monthDay && ['M', '2M', 'Q', '4M', 'H', 'Y'].indexOf(freq) > -1) {
+        monthDay = String(o.day_of_month !== undefined ? Number(o.day_of_month) : (dm ? +dm[3] : ''));
+      }
       snap.taskList.unshift({
-        setupId: String((gasResult && (gasResult.setup_id || gasResult.task_id || gasResult.uid)) || ('NEW-' + Date.now())),
+        // Code.gs returns { task_uid } — the real id (a fake NEW-... id made Deactivate fail on new tasks)
+        setupId: String((gasResult && (gasResult.task_uid || gasResult.setup_id || gasResult.task_id || gasResult.uid)) || ('NEW-' + Date.now())),
         task: String(o.task_name || o.task || ''),
-        doerId: String(o.doer_id || o.emp_id || ''),
-        doerName: String(o.doer_name || ''),
-        department: String(o.department || ''),
-        frequency: String(o.frequency || o.freq || 'Daily'),
-        weekDay: String(o.week_day || ''),
-        monthDay: String(o.month_day || ''),
-        dayDate: String(o.day_date || o.scheduled_time || ''),
-        status: 'Active',
-        startDate: String(o.start_date || today)
+        doerId: String(o.emp_id || o.doer_id || ''),
+        doerName: String(o.emp_name || o.doer_name || ''),
+        department: String(o.dept || o.department || ''),
+        frequency: freq,
+        weekDay: weekDay,
+        monthDay: monthDay,
+        dayDate: dayDate,
+        status: (gasResult && gasResult.rows > 0) ? 'Sent' : 'Active',
+        deleteRepeated: '',
+        startDate: sd || today
       });
       return true;
     }
@@ -592,12 +609,12 @@ async function tryGlobalSnap(fn, args, email, meta) {
   if (!SNAPSHOT_READS.has(fn)) return undefined;
   if (process.env.SNAPSHOT !== 'on') return undefined;
   try {
-    const m = await store.getMeta();
+    // Both Firestore reads in parallel (was one after the other = 2 round trips)
+    const [m, st] = await Promise.all([store.getMeta(), store.getSyncState()]);
     if (!m) {
       waitUntil(runSync().catch(() => {}));
       return undefined; // first boot only — no snap yet
     }
-    const st = await store.getSyncState();
     const snap = await store.loadSnapshot(m);
     const out = fromSnapshot(fn, args, email, snap);
     if (out !== undefined) {
