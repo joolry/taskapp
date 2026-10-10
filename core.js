@@ -1640,7 +1640,7 @@
       }, function () { });
 
       // 5) My attendance this month
-      var ym = (new Date()).toISOString().slice(0, 7);
+      var ym = _currMonth();
       _gas('getMyAttendance', [null, ym], function (att) {
         if (att) _D.myAttendance = att;
       }, function () { });
@@ -5381,8 +5381,7 @@
                 (stLbl === '—' ? 'Done' : stLbl) + '</span>' +
               (r.check_in ? '<span style="font-size:12px;font-weight:700;color:var(--G)"><i class="fas fa-arrow-right-to-bracket"></i> ' + _esc(r.check_in) + '</span>' : '') +
               (r.check_out ? '<span style="font-size:12px;font-weight:700;color:var(--R)"><i class="fas fa-arrow-right-from-bracket"></i> ' + _esc(r.check_out) + '</span>' : '') +
-              '<i class="fas fa-circle-check" style="color:var(--G);font-size:14px"></i>' +
-              '<button type="button" class="tam-btn" onclick="_tamEdit(\'' + _esc(r.emp_id) + '\',\'' + _esc(r.name) + '\',\'' + _esc(d) + '\',\'' + _esc(r.check_in || '') + '\',\'' + _esc(r.check_out || '') + '\',\'' + _esc(r.status || 'P') + '\')" style="padding:6px 10px;border-radius:8px;background:var(--sur);color:var(--P);font-size:12px;font-weight:700;border:1.5px solid var(--bdr);cursor:pointer;margin-left:6px"><i class="fas fa-pen"></i> Edit</button>'
+              '<i class="fas fa-circle-check" style="color:var(--G);font-size:14px"></i>'
               : marked && r.needs_checkout
               ? '<span style="padding:4px 10px;border-radius:20px;font-size:11px;font-weight:800;background:#fef3c7;color:#d97706">OUT pending</span>' +
               (r.check_in ? '<span style="font-size:12px;font-weight:700;color:var(--G)"><i class="fas fa-arrow-right-to-bracket"></i> ' + _esc(r.check_in) + '</span>' : '') +
@@ -5395,13 +5394,13 @@
               '<option value="WO"' + (r.status === 'WO' || r.status === 'Week Off' ? ' selected' : '') + '>Week Off</option>' +
               '<option value="PTO"' + (r.status === 'PTO' ? ' selected' : '') + '>PTO</option>' +
               '</select>' +
-              '<button id="mb_' + r.emp_id + '" class="tam-btn" onclick="_tamMark1(\'' + _esc(r.emp_id) + '\',\'' + _esc(r.name) + '\',\'' + _esc(d) + '\')" style="padding:6px 14px;border-radius:8px;background:#d97706;color:#fff;font-size:12px;font-weight:800;border:none;cursor:pointer;white-space:nowrap"><i class="fas fa-sign-out-alt"></i> Mark OUT</button>' + '<button type="button" class="tam-btn" onclick="_tamEdit(\'' + _esc(r.emp_id) + '\',\'' + _esc(r.name) + '\',\'' + _esc(d) + '\')" style="padding:6px 10px;border-radius:8px;background:var(--sur);color:var(--P);font-size:12px;font-weight:700;border:1.5px solid var(--bdr);cursor:pointer"><i class="fas fa-pen"></i></button>'
+              '<button id="mb_' + r.emp_id + '" class="tam-btn" onclick="_tamMark1(\'' + _esc(r.emp_id) + '\',\'' + _esc(r.name) + '\',\'' + _esc(d) + '\')" style="padding:6px 14px;border-radius:8px;background:#d97706;color:#fff;font-size:12px;font-weight:800;border:none;cursor:pointer;white-space:nowrap"><i class="fas fa-sign-out-alt"></i> Mark OUT</button>'
               : '<input type="time" id="ti_' + r.emp_id + '" value="' + curTime + '" class="tam-time" style="padding:5px 8px;border-radius:8px;border:1.5px solid var(--bdr);background:var(--bg);font-size:12px;color:var(--tx);min-width:100px" title="Check-in">' +
               '<input type="time" id="to_' + r.emp_id + '" class="tam-time" style="padding:5px 8px;border-radius:8px;border:1.5px solid var(--bdr);background:var(--bg);font-size:12px;color:var(--tx);min-width:100px" title="Check-out">' +
               '<select id="st_' + r.emp_id + '" class="tam-sel" style="padding:5px 8px;border-radius:8px;border:1.5px solid var(--bdr);background:var(--bg);font-size:12px;color:var(--tx)">' +
               '<option value="P">Present</option><option value="HD">Half Day</option><option value="A">Absent</option><option value="WO">Week Off</option><option value="PTO">PTO</option>' +
               '</select>' +
-              '<button id="mb_' + r.emp_id + '" class="tam-btn" onclick="_tamMark1(\'' + _esc(r.emp_id) + '\',\'' + _esc(r.name) + '\',\'' + _esc(d) + '\')" style="padding:6px 14px;border-radius:8px;background:var(--G);color:#fff;font-size:12px;font-weight:800;border:none;cursor:pointer;white-space:nowrap"><i class="fas fa-check"></i> Mark</button>' + '<button type="button" class="tam-btn" onclick="_tamEdit(\'' + _esc(r.emp_id) + '\',\'' + _esc(r.name) + '\',\'' + _esc(d) + '\')" style="padding:6px 10px;border-radius:8px;background:var(--sur);color:var(--P);font-size:12px;font-weight:700;border:1.5px solid var(--bdr);cursor:pointer;margin-left:4px"><i class="fas fa-pen"></i></button>'
+              '<button id="mb_' + r.emp_id + '" class="tam-btn" onclick="_tamMark1(\'' + _esc(r.emp_id) + '\',\'' + _esc(r.name) + '\',\'' + _esc(d) + '\')" style="padding:6px 14px;border-radius:8px;background:var(--G);color:#fff;font-size:12px;font-weight:800;border:none;cursor:pointer;white-space:nowrap"><i class="fas fa-check"></i> Mark</button>'
             ) +
             '<button type="button" class="tam-btn" onclick="_tamEdit(\'' + _esc(r.emp_id) + '\',\'' + _esc(r.name) + '\',\'' + _esc(d) + '\',\'' + _esc(r.check_in || '') + '\',\'' + _esc(r.check_out || '') + '\',\'' + _esc(r.status || 'P') + '\')" style="padding:6px 10px;border-radius:8px;background:var(--sur);color:var(--P);font-size:12px;font-weight:700;border:1.5px solid var(--bdr);cursor:pointer" title="Edit attendance"><i class="fas fa-pen"></i> Edit</button>' +
             '</div></div>';
@@ -11663,9 +11662,11 @@
         if (de) de.value = date;
       }
 
-      // SWR: show cached data instantly when it matches current emp+date
+      // SWR: instant paint from cache (same emp+date, or same date for self)
       var cacheKey = String(empId || '') + '|' + String(date || '');
-      var hasCache = _D.todayTasks && _D._ckTodayKey === cacheKey && Array.isArray(_D.todayTasks);
+      var selfKey = String((_U && _U.emp_code) || '') + '|' + String(date || '');
+      var hasCache = _D.todayTasks && Array.isArray(_D.todayTasks) &&
+        (_D._ckTodayKey === cacheKey || (_D._ckTodayKey === selfKey && (!empId || empId === (_U && _U.emp_code))));
       if (hasCache) {
         _ckRenderProgress(_D.todayTasks);
         _renderCkList();
@@ -11673,7 +11674,13 @@
         el.innerHTML = _skel(4);
       }
 
-      _gasX('getTodayTasks', [empId, date], 35000, function (tasks) {
+      // Today → snapshot path (fast _gas). Past dates may need GAS (longer timeout).
+      var isToday = (date === _today());
+      var fetcher = isToday
+        ? function (ok, err) { _gas('getTodayTasks', [empId, date], ok, err); }
+        : function (ok, err) { _gasX('getTodayTasks', [empId, date], 35000, ok, err); };
+
+      fetcher(function (tasks) {
         tasks = tasks || [];
         _D.todayTasks = tasks;
         _D._ckTodayKey = cacheKey;
