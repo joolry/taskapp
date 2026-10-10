@@ -3610,10 +3610,19 @@
       _downloadCSV('task_history_' + _today() + '.csv', rows);
     }
 
-    function _loadSetupTasks() {
+    function _loadSetupTasks(silent) {
+      silent = (silent === true);          // true = refresh behind the screen, never blank the list
       var el = document.getElementById('setupTaskList');
       if (!el) return;
-      el.innerHTML = _skel(3, 'sk-h4');
+      if (!silent) {
+        if (window._tsAllTasks && window._tsAllTasks.length) {
+          // Instant paint from memory; fresh data replaces it a moment later
+          el.innerHTML = ''; _tsRenderBar(el); _tsApplyFilter();
+          setTimeout(function () {_initSearchSelects(el);}, 60);
+        } else {
+          el.innerHTML = _skel(3, 'sk-h4');
+        }
+      }
 
       // ── Employee dropdown — hamesha fresh load ──
       if (_isManager()) {
@@ -3671,6 +3680,7 @@
           if (!seen[uid]) { seen[uid] = true; t._i = allList.length; allList.push(t); }
         });
         if (!allList.length) {
+          window._tsAllTasks = [];
           el2.innerHTML = '<div class="empty-state"><i class="fas fa-tasks"></i><h4>No Active Tasks</h4><p>Add a task using the form above.</p></div>';
           return;
         }
@@ -4049,7 +4059,8 @@
           document.getElementById('csFreqX').innerHTML = '';
           // Force fresh load of Active Tasks (bypass cache)
           _D.deptTasks = null;
-          _loadSetupTasks();
+          _tsAddLocal(obj, r);          // appears on screen immediately
+          _loadSetupTasks(true);        // silent confirm from server (no skeleton)
         } else {
           _endSub('btnSaveTask');
           _toast('Error: ' + (r && r.error ? r.error : 'Unknown error'), 'err');
@@ -4061,31 +4072,68 @@
     }
 
 
+    function _tsReindex() {(window._tsAllTasks || []).forEach(function (x, n) {x._i = n;});}
+
+    // Show a just-saved task at once (same fields the server will return); silent refresh confirms it.
+    function _tsAddLocal(obj, r) {
+      var uid = String((r && r.task_uid) || '').trim();
+      if (!uid) return;
+      var DN = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      var f = String(obj.frequency || 'D');
+      var sd = String(obj.start_date || '').slice(0, 10).split('-');
+      var tm = String(obj.task_time || '').slice(0, 5);
+      var dd = (sd.length === 3 && tm.indexOf(':') > 0) ? sd[2] + '/' + sd[1] + '/' + sd[0] + ' ' + tm + ':00' : '';
+      var wd = '', md = '';
+      if (['W', 'E1st', 'E2nd', 'E3rd', 'E4th', 'ELast'].indexOf(f) > -1) {
+        var dow = obj.day_of_week !== undefined ? Number(obj.day_of_week) : (sd.length === 3 ? new Date(+sd[0], +sd[1] - 1, +sd[2]).getDay() : -1);
+        wd = DN[dow] || '';
+      } else if (['M', '2M', 'Q', '4M', 'H', 'Y'].indexOf(f) > -1) {
+        md = String(obj.day_of_month !== undefined ? Number(obj.day_of_month) : (sd.length === 3 ? +sd[2] : ''));
+      }
+      var list = window._tsAllTasks || (window._tsAllTasks = []);
+      list.unshift({
+        task_uid: uid, task_name: obj.task_name || '', emp_id: String(obj.emp_id || ''), emp_name: obj.emp_name || '',
+        dept: obj.dept || '', frequency: f, day_date: dd, day_label: dd, week_day: wd, month_day: md,
+        sheet_status: (r && r.rows > 0) ? 'Sent' : 'Active', delete_repeated: ''
+      });
+      _tsReindex();
+      _tsRenderFiltered();
+    }
+
+    // Deactivate: the task leaves the screen the moment you confirm; the server cleanup (Task List +
+    // Checklist rows) runs behind it. If the server fails, the task is put back with an error.
     function _deactivateTask(uid) {
       uid = String(uid || '').trim();
       if (!uid || uid.indexOf('__row_') === 0) {
-        _toast('Task UID missing — cannot delete this row', 'err');
+        _toast('Task UID missing -- cannot delete this row', 'err');
         return;
       }
+      window._tsBusy = window._tsBusy || {};
+      if (window._tsBusy[uid]) return;                       // double-click guard
       _openModal(
         '<i class="fas fa-trash" style="color:var(--R)"></i> Deactivate Task',
         '<p style="font-size:14px;color:var(--tx2);line-height:1.6">Remove this task from the recurring list? This cannot be undone. Future checklist rows will also be deleted.</p>' +
         '<div style="margin-top:8px;font-size:11px;color:var(--tx3)">UID: <code>' + _esc(uid) + '</code></div>',
         function () {
           _closeModal();
-          _toast('<i class="fas fa-circle-notch fa-spin"></i> Deleting task...', 'info');
-          _gasX('deactivateTask', [uid], 30000, function (r) {
-            _toast('✓ Task deleted — ' + ((r && r.checklistRowsDeleted) || 0) + ' checklist rows removed', 'ok');
-            if (window._tsAllTasks) {
-              window._tsAllTasks = window._tsAllTasks.filter(function (x) {
-                return String(x.task_uid || '') !== uid;
-              });
-              window._tsAllTasks.forEach(function (x, n) {x._i = n;});
-              _tsApplyFilter();
-            }
-            _loadSetupTasks();
+          var list = window._tsAllTasks || [], pos = -1, removed = null;
+          for (var n = 0; n < list.length; n++) {
+            if (String(list[n].task_uid || '') === uid) {pos = n; removed = list[n]; break;}
+          }
+          if (pos >= 0) {list.splice(pos, 1); _tsReindex(); _tsApplyFilter();}   // instant
+          window._tsBusy[uid] = 1;
+          _toast('<i class="fas fa-circle-notch fa-spin"></i> Deactivating task...', 'info');
+          _gasX('deactivateTask', [uid], 90000, function (r) {
+            delete window._tsBusy[uid];
+            _toast('✓ Task deactivated — ' + ((r && r.checklistRowsDeleted) || 0) + ' checklist rows removed', 'ok');
+            _loadSetupTasks(true);                                                // silent confirm
           }, function (e) {
-            _toast('Error: ' + ((e && e.message) || 'Delete failed'), 'err');
+            delete window._tsBusy[uid];
+            if (removed) {                                                         // put it back
+              var cur = window._tsAllTasks || (window._tsAllTasks = []);
+              cur.splice(Math.min(pos, cur.length), 0, removed); _tsReindex(); _tsRenderFiltered();
+            }
+            _toast('Error: ' + ((e && e.message) || 'Deactivate failed') + ' — task restored', 'err');
           });
         },
         '<i class="fas fa-trash"></i> Deactivate'
