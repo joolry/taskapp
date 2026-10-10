@@ -2,6 +2,7 @@
 // &force=1 → bypass lock, rebuild now (stuck queue fix)
 const cache = require('./_cache');
 const { runSync, store } = require('./_lib');
+const { coverage } = require('./_snapServe');
 
 module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
@@ -88,6 +89,7 @@ module.exports = async (req, res) => {
           leave: (snap.leaveRequests || []).length
         },
         snapshot: { version: meta.version, bytes: meta.bytes, chunks: meta.chunks },
+        checklistCoverage: coverage(snap),   // dates the snapshot can answer; older dates go to the sheet
         sync: { ran: true, loops: 1, mode: 'force' }
       });
     }
