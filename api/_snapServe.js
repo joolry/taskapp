@@ -97,6 +97,43 @@ function daysAgoStr(n) {
   return new Date(Date.now() + 19800000 - n * 86400000).toISOString().slice(0, 10);
 }
 
+// ── Checklist rows = checklistToday + checklistRecent, WITHOUT double counting ───────────────────
+// (after a refresh both arrays hold today's rows; counting both gave duplicate / stale rows in Week + History)
+const _chkMemo = new WeakMap();
+function chkAll(snap) {
+  const hit = _chkMemo.get(snap); if (hit) return hit;
+  const today = snap.checklistToday || [], recent = snap.checklistRecent || [];
+  const have = new Set();
+  today.forEach(function (l) { have.add(normDate(l.planned) + '|' + String(l.nameId || '') + '|' + String(l.task || '')); });
+  const out = today.slice();
+  recent.forEach(function (l) {
+    if (!have.has(normDate(l.planned) + '|' + String(l.nameId || '') + '|' + String(l.task || ''))) out.push(l);
+  });
+  _chkMemo.set(snap, out);
+  return out;
+}
+// Which dates the snapshot really holds. Outside this window we must ask the sheet (GAS), not show "empty".
+const _covMemo = new WeakMap();
+function coverage(snap) {
+  const hit = _covMemo.get(snap); if (hit) return hit;
+  let from = '', to = '';
+  chkAll(snap).forEach(function (l) {
+    const d = normDate(l.planned); if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return;
+    if (!from || d < from) from = d;
+    if (!to || d > to) to = d;
+  });
+  const t = snap.today || istToday();
+  if (!from || t < from) from = from || t;
+  if (!to || t > to) to = t;
+  const c = { from: from, to: to };
+  _covMemo.set(snap, c);
+  return c;
+}
+function asDate(v) {
+  const s = String(v == null ? '' : v).trim();
+  return (/^\d{4}-\d{2}-\d{2}/.test(s) || /^\d{1,2}\/\d{1,2}\/\d{4}/.test(s)) ? normDate(s) : '';
+}
+
 function buildDashStats(snap, doer) {
   const today = snap.today || istToday();
   const code = empCode(doer);
@@ -137,14 +174,16 @@ function buildTodayAtt(snap, doer) {
   return empty;
 }
 
-function buildTodayTasks(snap, doer, dateArg) {
+function buildTodayTasks(snap, doer, dateArg, empArg) {
   const today = snap.today || istToday();
-  const target = normDate(dateArg) || today;
-  const code = empCode(doer);
+  const target = asDate(dateArg) || today;
+  // managers may open another employee's list (same rule as Code.gs); everybody else sees only their own
+  const code = (isManager(doer) && empArg && /^[\w-]+$/.test(String(empArg))) ? String(empArg) : empCode(doer);
   if (!code) return [];
   const out = [], occCount = {};
-  for (let i = 0; i < (snap.checklistToday || []).length; i++) {
-    const l = snap.checklistToday[i];
+  const src = chkAll(snap);
+  for (let i = 0; i < src.length; i++) {
+    const l = src[i];
     const nameId = String(l.nameId || '').trim();
     const transTo = String(l.transferredTo || '').trim();
     const rowDate = normDate(l.planned);
@@ -224,9 +263,9 @@ function buildTeamAttendance(snap, dateArg) {
   });
 }
 function buildTeamChecklist(snap, dateArg, deptFlt) {
-  const date = normDate(dateArg) || snap.today || istToday();
+  const date = asDate(dateArg) || snap.today || istToday();
   const empMap = {}; (snap.doers || []).forEach(d => { empMap[d.emp_id] = d; });
-  const source = (snap.checklistToday || []).concat((snap.checklistRecent || []).filter(r => normDate(r.planned) === date));
+  const source = chkAll(snap);
   const seen = {}, out = [], occCount = {};
   for (let i = 0; i < source.length; i++) {
     const l = source[i];
@@ -332,7 +371,7 @@ function buildWeeklyTasks(snap, doer, empIdArg, weekNum, yearNum) {
   const wk = Number(weekNum) || 1;
   const weekDates = isoWeekDates(yr, wk);
   const holSet = {}; (snap.holidays || []).forEach(h => { if (h.date) holSet[h.date] = true; });
-  const source = (snap.checklistToday || []).concat(snap.checklistRecent || []);
+  const source = chkAll(snap);
   const byDate = {}; weekDates.forEach(d => { byDate[d] = []; });
   source.forEach(l => {
     if (String(l.nameId || '') !== String(code)) return;
@@ -349,7 +388,7 @@ function buildTaskHistory(snap, doer, empIdArg, fromDate, toDate) {
   const code = empIdArg || empCode(doer);
   const from = normDate(fromDate) || daysAgoStr(14);
   const to = normDate(toDate) || (snap.today || istToday());
-  return (snap.checklistToday || []).concat(snap.checklistRecent || [])
+  return chkAll(snap)
     .filter(l => String(l.nameId || '') === String(code) && normDate(l.planned) >= from && normDate(l.planned) <= to)
     .map(l => ({ planned: normDate(l.planned), task_name: String(l.task || ''), status: String(l.status || ''), actual: String(l.actual || ''), frequency: String(l.freq || ''), task_uid: String(l.taskId || l.uid || ''), remark: String(l.remark || '') }))
     .sort((a, b) => b.planned.localeCompare(a.planned));
@@ -412,7 +451,11 @@ function fromSnapshot(fn, args, email, snap) {
     case 'getDashboardStats': return buildDashStats(snap, doer);
     case 'getDashboardStatsFresh': return buildDashboardStatsFresh(snap, doer);
     case 'getTodayAttendanceStatus': return buildTodayAtt(snap, doer);
-    case 'getTodayTasks': return buildTodayTasks(snap, doer, args[1] || args[0]);
+    case 'getTodayTasks': {
+      const dt = asDate(args[1]) || asDate(args[0]), cv = coverage(snap);
+      if (dt && (dt < cv.from || dt > cv.to)) return undefined;
+      return buildTodayTasks(snap, doer, dt, args[0]);
+    }
     case 'getMyDelegations': return buildMyDelegations(snap, doer);
     case 'getMyDelegatedOut': return buildMyDelegatedOut(snap, doer);
     case 'getAllDelegations': return buildAllDelegations(snap, args[0]);
@@ -421,14 +464,26 @@ function fromSnapshot(fn, args, email, snap) {
     case 'getHolidayList': return snap.holidays || [];
     case 'getDoerList': return (snap.doers || []).map(d => ({ emp_id: d.emp_id, name: d.name, department: d.department || '', email: d.email || '', role: d.role || 'STAFF', photo: d.photo || '', phone: d.phone || '', week_off_day: d.week_off_day != null ? d.week_off_day : 0 }));
     case 'getTeamAttendanceStatus': return buildTeamAttendance(snap, args[0]);
-    case 'getTeamChecklistToday': return buildTeamChecklist(snap, args[0], args[1]);
+    case 'getTeamChecklistToday': {
+      const dt = asDate(args[0]), cv = coverage(snap);
+      if (dt && (dt < cv.from || dt > cv.to)) return undefined;
+      return buildTeamChecklist(snap, args[0], args[1]);
+    }
     case 'getMyAttendance': return buildMyAttendance(snap, doer, args[0], args[1]);
     case 'getLeaveRequests': return buildLeaveRequests(snap, doer, args[0]);
     case 'getLeaveSummary': return buildLeaveSummary(snap, doer, args[0], args[1]);
     case 'getLeaveBalance': return buildLeaveBalance(snap, doer);
     case 'getRegularizationRequests': return buildRegRequests(snap, doer);
-    case 'getWeeklyTasks': return buildWeeklyTasks(snap, doer, args[0], args[1], args[2]);
-    case 'getTaskHistory': return buildTaskHistory(snap, doer, args[0], args[1], args[2]);
+    case 'getWeeklyTasks': {
+      const yr = args[2] ? Number(args[2]) : new Date().getFullYear(), wd = isoWeekDates(yr, Number(args[1]) || 1), cv = coverage(snap);
+      if (wd[0] < cv.from && wd[6] < (snap.today || istToday())) return undefined;   // old week not fully in snapshot
+      return buildWeeklyTasks(snap, doer, args[0], args[1], args[2]);
+    }
+    case 'getTaskHistory': {
+      const from = asDate(args[1]) || daysAgoStr(14), cv = coverage(snap);
+      if (from < cv.from) return undefined;                                          // range older than snapshot
+      return buildTaskHistory(snap, doer, args[0], args[1], args[2]);
+    }
     case 'getDeptTasks': return buildDeptTasks(snap, doer, args[0]);
     case 'getTaskSetup': return buildTaskSetup(snap, doer, args[0]);
     case 'getTodayCelebrations': return buildCelebrations(snap);
@@ -440,4 +495,4 @@ function fromSnapshot(fn, args, email, snap) {
     default: return undefined;
   }
 }
-module.exports = { fromSnapshot, istToday, findDoer };
+module.exports = { fromSnapshot, istToday, findDoer, normDate, coverage, chkAll };
