@@ -2,7 +2,7 @@
 const crypto = require('crypto');
 const cache = require('./_cache');
 const store = require('./_store');
-const { fromSnapshot } = require('./_snapServe');
+const { fromSnapshot, normDate } = require('./_snapServe');
 
 const isRead = (fn) => /^(get|validate)/.test(fn);
 
@@ -215,29 +215,44 @@ async function rebuildAfterWrite() {
 }
 
 
-/** Instant patch SNAP after write — clone first so a bad mutator cannot wipe live SNAP */
-async function patchSnap(mutator) {
-  try {
-    const m = await store.getMeta();
-    if (!m) return false;
-    const live = await store.loadSnapshot(m);
-    // Deep clone so mutations never touch the in-memory cache until save succeeds
-    const snap = JSON.parse(JSON.stringify(live));
-    const beforeDoers = (snap.doers || []).length;
-    const ok = mutator(snap);
-    if (!ok) return false;
-    // Guard: mutator must not wipe core arrays
-    if (beforeDoers > 0 && !(snap.doers || []).length) {
-      console.error('patchSnap refused: mutator cleared doers');
+/** Instant patch SNAP after write.
+ *  Compare-and-swap: the save only commits if nobody else saved in between; otherwise we re-read the
+ *  newer snapshot and re-apply this change on top of it (so 10 people tapping "Done" together all stick).
+ *  Clone first so a bad mutator cannot wipe the live SNAP. */
+let _patchChain = Promise.resolve();   // writes on the SAME instance go one after another (no self-conflicts)
+function patchSnap(mutator) {
+  const run = _patchChain.then(() => patchOnce(mutator));
+  _patchChain = run.catch(() => {});
+  return run;
+}
+async function patchOnce(mutator) {
+  for (let attempt = 0; attempt < 12; attempt++) {
+    try {
+      const m = await store.getMeta();
+      if (!m) return false;
+      const live = await store.loadSnapshot(m);
+      const snap = JSON.parse(JSON.stringify(live));
+      const beforeDoers = (snap.doers || []).length;
+      const ok = mutator(snap);
+      if (!ok) return false;
+      if (beforeDoers > 0 && !(snap.doers || []).length) {
+        console.error('patchSnap refused: mutator cleared doers');
+        return false;
+      }
+      snap.builtAt = new Date().toISOString();
+      await store.saveSnapshot(snap, m.version);
+      return true;
+    } catch (e) {
+      if (e && e.code === 'SNAP_CONFLICT') {            // another instance saved first → redo on top of theirs
+        await new Promise(r => setTimeout(r, Math.random() * 25 * (attempt + 1)));
+        continue;
+      }
+      console.error('patchSnap', e.message);
       return false;
     }
-    snap.builtAt = new Date().toISOString();
-    await store.saveSnapshot(snap);
-    return true;
-  } catch (e) {
-    console.error('patchSnap', e.message);
-    return false;
   }
+  console.error('patchSnap: too many conflicts');
+  return false;
 }
 
 function applyWritePatch(fn, clientArgs, gasResult, email) {
@@ -255,7 +270,7 @@ function applyWritePatch(fn, clientArgs, gasResult, email) {
     const myCode = me ? String(me.emp_id || '') : '';
     const myName = me ? String(me.name || '') : '';
     const myDept = me ? String(me.department || '') : '';
-    const nowTs = new Date().toISOString().slice(0, 19).replace('T', ' ');
+    const nowTs = new Date(Date.now() + 19800000).toISOString().slice(0, 19).replace('T', ' ');   // IST, same clock as the sheet
 
     function findDel(taskId) {
       return snap.delegations.find(d => String(d.taskId) === String(taskId));
@@ -319,23 +334,33 @@ function applyWritePatch(fn, clientArgs, gasResult, email) {
     }
 
     // ═══════════════ CHECKLIST ═══════════════
+    // Today / Week / Team / History all read checklistToday + checklistRecent, so EVERY patch hits BOTH
+    // (before: only checklistToday changed → Week & History kept showing the old Pending copy).
+    const chkEach = (f) => {
+      let hit = false;
+      ['checklistToday', 'checklistRecent'].forEach(k => {
+        if (Array.isArray(snap[k])) snap[k].forEach(t => { if (f(t)) hit = true; });
+      });
+      return hit;
+    };
+    const sameDay = (t, d) => !d || normDate(t.planned) === d;
+
     if (fn === 'markTaskDone') {
-      // args: rowNum, occ, taskUid, taskName, taskPlanned, date, remarks
+      // args: rowNum, occ, taskUid, taskName, taskPlanned, date, remarks   (also used to EDIT a remark)
       const rowNum = clientArgs[0];
       const taskUid = String(clientArgs[2] || '');
       const taskName = String(clientArgs[3] || '');
-      const planned = String(clientArgs[4] || clientArgs[5] || '');
-      let hit = false;
-      snap.checklistToday.forEach(t => {
+      const pd = normDate(clientArgs[4] || clientArgs[5] || '');
+      const remark = clientArgs[6] == null ? null : String(clientArgs[6]);
+      return chkEach(t => {
         const byUid = taskUid && String(t.taskId || t.uid || '') === taskUid;
         const byRow = taskName && String(t.task || '') === taskName && String(t.rowNum) === String(rowNum);
-        if (byUid || byRow) {
-          t.status = 'Done';
-          t.actual = planned || today;
-          hit = true;
-        }
+        if (!(byUid || byRow) || !sameDay(t, pd)) return false;
+        if (t.status !== 'Done' || !t.actual) t.actual = nowTs;   // keep original completion time on remark edits
+        t.status = 'Done';
+        if (remark !== null) t.remark = remark;
+        return true;
       });
-      return hit;
     }
 
     if (fn === 'markTeamTaskDone') {
@@ -343,56 +368,53 @@ function applyWritePatch(fn, clientArgs, gasResult, email) {
       const rowNum = clientArgs[0];
       const taskName = String(clientArgs[2] || '');
       const empId = String(clientArgs[3] || '');
-      let hit = false;
-      snap.checklistToday.forEach(t => {
+      const pd = normDate(clientArgs[4] || '');
+      const remark = clientArgs[5] == null ? null : String(clientArgs[5]);
+      if (!taskName && !empId) return false;
+      return chkEach(t => {
         const matchName = !taskName || String(t.task || '') === taskName;
         const matchEmp = !empId || String(t.nameId || '') === empId;
-        const matchRow = rowNum == null || String(t.rowNum) === String(rowNum);
-        if (matchName && matchEmp && matchRow) {
-          t.status = 'Done';
-          hit = true;
-        }
+        const matchRow = rowNum == null || rowNum === '' || String(t.rowNum) === String(rowNum);
+        if (!(matchName && matchEmp && matchRow) || !sameDay(t, pd)) return false;
+        if (t.status !== 'Done' || !t.actual) t.actual = nowTs;
+        t.status = 'Done';
+        if (remark !== null) t.remark = remark;
+        return true;
       });
-      return hit;
     }
 
     if (fn === 'transferChecklistTask') {
       // args: rowNum, occ, taskUid, taskName, taskPlanned, fromEmpId, toEmpId, reason
       const taskUid = String(clientArgs[2] || '');
       const taskName = String(clientArgs[3] || '');
+      const pd = normDate(clientArgs[4] || '');
       const fromEmp = String(clientArgs[5] || '');
       const toEmp = String(clientArgs[6] || '');
       const reason = String(clientArgs[7] || '');
-      let hit = false;
-      snap.checklistToday.forEach(t => {
+      return chkEach(t => {
         const byUid = taskUid && String(t.taskId || t.uid || '') === taskUid;
         const byName = taskName && String(t.task || '') === taskName && String(t.nameId || '') === fromEmp;
-        if (byUid || byName) {
-          t.transferredTo = toEmp;
-          t.transferBy = myCode || fromEmp;
-          t.transferReason = reason;
-          t.transferredAt = nowTs;
-          hit = true;
-        }
+        if (!(byUid || byName) || !sameDay(t, pd)) return false;
+        t.transferredTo = toEmp;
+        t.transferBy = myCode || fromEmp;
+        t.transferReason = reason;
+        t.transferredAt = nowTs;
+        return true;
       });
-      return hit;
     }
 
     if (fn === 'managerShiftTask') {
-      // args: taskId, empId, fromDate, toDate — update planned date on checklist
+      // args: taskId, empId, fromDate, toDate — move the checklist row to the new planned date
       const taskId = String(clientArgs[0] || '');
       const empId = String(clientArgs[1] || '');
       const toDate = String(clientArgs[3] || '');
-      let hit = false;
-      snap.checklistToday.forEach(t => {
-        if (taskId && String(t.taskId || t.uid || '') === taskId) {
-          if (!empId || String(t.nameId || '') === empId) {
-            if (toDate) t.planned = toDate;
-            hit = true;
-          }
-        }
+      if (!taskId) return false;
+      return chkEach(t => {
+        if (String(t.taskId || t.uid || '') !== taskId) return false;
+        if (empId && String(t.nameId || '') !== empId) return false;
+        if (toDate) t.planned = toDate;
+        return true;
       });
-      return hit;
     }
 
     if (fn === 'saveNewTask' && gasResult && gasResult.success !== false) {
@@ -618,8 +640,12 @@ async function refreshChecklistPart() {
       // Guard: a failed sheet read comes back empty — never blank a good snapshot with it
       if (!part.checklistToday.length && (snap.checklistToday || []).length > 20) return false;
       if (!part.taskList.length && (snap.taskList || []).length > 20) return false;
+      // Replace the dates the sheet just returned; KEEP older days already in checklistRecent
+      // (before: checklistRecent was cut down to today → Week / History / past dates went empty).
+      const fresh = new Set(part.checklistToday.map(r => normDate(r.planned)));
+      const older = (snap.checklistRecent || []).filter(r => !fresh.has(normDate(r.planned)));
       snap.checklistToday = part.checklistToday;
-      snap.checklistRecent = part.checklistToday.slice();
+      snap.checklistRecent = older.concat(part.checklistToday);
       snap.taskList = part.taskList;
       return true;
     });
@@ -710,7 +736,7 @@ async function handle(fn, args, token, meta) {
     const patched = await applyWritePatch(fn, clientArgs, r, s.email);
     meta.snapPatched = !!patched;
     if (CHECKLIST_WRITES.has(fn)) meta.snapChecklist = await refreshChecklistPart();
-    if (!patched) {
+    if (!patched && !(CHECKLIST_WRITES.has(fn) && meta.snapChecklist)) {
       // Unknown write type: careful full rebuild (guarded against empty)
       await rebuildAfterWrite();
       meta.snapRebuilt = true;
