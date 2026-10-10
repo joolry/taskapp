@@ -5,50 +5,51 @@
                T=Teal, I=Info, A=Accent, l=light bg version
 ══════════════════════════════════════════════════════════════════════ */
     :root {
-      /* ── Prompt-inspired design system + Joolry brand ── */
-      /* Primary: deep ink (Joolry) with soft blue interactive accent */
-      --P: #1E293B;
-      --Pd: #0F172A;
-      --Pl: rgba(30, 41, 59, .08);
-      --Pm: rgba(30, 41, 59, .16);
-      --accent: #3B82F6;
-      --accent-d: #2563EB;
-      --accent-l: rgba(59, 130, 246, .12);
+      /* ── Joolry brand (joolry.in) + soft premium mobile UI ── */
+      /* Primary ink black (site --colorBtnPrimary #111111) */
+      --P: #111111;
+      --Pd: #000000;
+      --Pl: rgba(17, 17, 17, .07);
+      --Pm: rgba(17, 17, 17, .14);
+      /* Rose-gold accent (jewellery brand) */
+      --accent: #B76E79;
+      --accent-d: #9A5560;
+      --accent-l: rgba(183, 110, 121, .14);
 
-      --G: #10B981;
-      --Gl: rgba(16, 185, 129, .12);
-      --R: #EF4444;
-      --Rl: rgba(239, 68, 68, .12);
-      --O: #F59E0B;
-      --Ol: rgba(245, 158, 11, .12);
-      --V: #8B5CF6;
-      --Vl: rgba(139, 92, 246, .12);
-      --T: #06B6D4;
-      --Tl: rgba(6, 182, 212, .12);
-      --I: #3B82F6;
-      --Il: rgba(59, 130, 246, .12);
-      --A: #94A3B8;
-      --Al: rgba(148, 163, 184, .12);
+      --G: #1B9E6E;
+      --Gl: rgba(27, 158, 110, .12);
+      --R: #D64545;
+      --Rl: rgba(214, 69, 69, .12);
+      --O: #E0A12E;
+      --Ol: rgba(224, 161, 46, .14);
+      --V: #8B6BB8;
+      --Vl: rgba(139, 107, 184, .12);
+      --T: #3A9BB5;
+      --Tl: rgba(58, 155, 181, .12);
+      --I: #B76E79;
+      --Il: rgba(183, 110, 121, .12);
+      --A: #9A9A9A;
+      --Al: rgba(154, 154, 154, .12);
 
-      /* Surfaces — Prompt soft slate */
-      --bg: #F1F5F9;
+      /* Soft cream surfaces like premium app mockups */
+      --bg: #F6F4F2;
       --sur: #FFFFFF;
-      --sur2: #F8FAFC;
-      --sur3: #F1F5F9;
-      --bdr: #E2E8F0;
-      --bdr2: #CBD5E1;
+      --sur2: #FAF8F6;
+      --sur3: #F0EDEB;
+      --bdr: #E8E4DF;
+      --bdr2: #D6D0C8;
 
-      /* Text — slate scale */
-      --tx: #0F172A;
-      --tx2: #475569;
-      --tx3: #94A3B8;
-      --tx4: #CBD5E1;
+      /* Text */
+      --tx: #111111;
+      --tx2: #5A5A5A;
+      --tx3: #9A9A9A;
+      --tx4: #C8C4BE;
 
       /* Sidebar */
       --sb: #FFFFFF;
-      --sb2: #F8FAFC;
-      --sbt: #0F172A;
-      --sbt2: #64748B;
+      --sb2: #FAF8F6;
+      --sbt: #111111;
+      --sbt2: #6B6B6B;
 
       /* Layout */
       --sbw: 260px;
@@ -58,9 +59,9 @@
       --r3: 8px;
 
       /* Shadows — Prompt soft elevation */
-      --shad: 0 1px 2px rgba(15, 23, 42, .04), 0 1px 3px rgba(15, 23, 42, .06);
-      --shad2: 0 4px 12px rgba(15, 23, 42, .06), 0 2px 4px rgba(15, 23, 42, .04);
-      --shad3: 0 12px 32px rgba(15, 23, 42, .10), 0 4px 12px rgba(15, 23, 42, .06);
+      --shad: 0 2px 8px rgba(17, 17, 17, .04), 0 1px 2px rgba(17, 17, 17, .03);
+      --shad2: 0 8px 24px rgba(17, 17, 17, .07), 0 2px 6px rgba(17, 17, 17, .04);
+      --shad3: 0 16px 40px rgba(17, 17, 17, .10), 0 4px 12px rgba(17, 17, 17, .05);
 
       /* Z-layers */
       --z-drop: 200;
@@ -14201,4 +14202,445 @@ html {
   .mob-nav, .topbar {
     transform: translateZ(0);
   }
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════
+   JOOLRY PREMIUM MOBILE UI — mockup layout, Joolry brand only
+   Soft cards · greeting headers · FAB bottom nav · pastel chips
+══════════════════════════════════════════════════════════════════════ */
+html, body, button, input, select, textarea {
+  font-family: "Plus Jakarta Sans", "Be Vietnam Pro", system-ui, -apple-system, sans-serif !important;
+}
+body {
+  background: var(--bg) !important;
+  color: var(--tx) !important;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Soft elevated cards (mockup style) */
+.card, .chart-wrap, .kpi, .att-punch-card, .dcard, .mod-panel,
+.pr-card-grid > .card, .table-card {
+  background: #fff !important;
+  border: none !important;
+  border-radius: 22px !important;
+  box-shadow: var(--shad) !important;
+}
+.card:hover, .kpi:hover {
+  box-shadow: var(--shad2) !important;
+  transform: none !important;
+}
+
+/* KPI / progress cards */
+.kpi {
+  padding: 18px 16px !important;
+  border-radius: 22px !important;
+}
+.kpi-ico {
+  width: 44px !important;
+  height: 44px !important;
+  border-radius: 14px !important;
+  margin-bottom: 12px !important;
+}
+.kpi-val {
+  font-size: 26px !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.03em !important;
+  color: var(--tx) !important;
+}
+.kpi-lbl {
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  color: var(--tx3) !important;
+  margin-top: 4px !important;
+}
+
+/* Primary actions — Joolry black, soft pill */
+.btn:not(.btn-outline):not(.btn-ghost):not(.l-btn) {
+  background: #111111 !important;
+  color: #fff !important;
+  border: none !important;
+  border-radius: 16px !important;
+  font-weight: 700 !important;
+  box-shadow: 0 4px 14px rgba(17, 17, 17, .18) !important;
+}
+.btn:not(.btn-outline):not(.btn-ghost):not(.l-btn):hover,
+.btn:not(.btn-outline):not(.btn-ghost):not(.l-btn):active {
+  background: #000 !important;
+}
+.btn-outline, .btn.btn-outline {
+  background: #fff !important;
+  color: #111 !important;
+  border: 1.5px solid var(--bdr) !important;
+  border-radius: 16px !important;
+  font-weight: 650 !important;
+}
+.btn-outline:hover {
+  border-color: var(--accent) !important;
+  color: var(--accent-d) !important;
+  background: var(--accent-l) !important;
+}
+.btn-green, .btnG { background: #1B9E6E !important; color: #fff !important; }
+.btn-red, .btnR { background: #D64545 !important; color: #fff !important; }
+.btn-checkin {
+  background: #111 !important;
+  color: #fff !important;
+  border-radius: 20px !important;
+  min-height: 52px !important;
+  font-weight: 700 !important;
+  box-shadow: 0 6px 18px rgba(17, 17, 17, .2) !important;
+}
+.btn-checkin.out {
+  background: var(--accent) !important;
+  box-shadow: 0 6px 18px rgba(183, 110, 121, .3) !important;
+}
+
+/* Login CTA */
+.l-btn {
+  background: linear-gradient(135deg, #111 0%, #2a2a2a 100%) !important;
+  border-radius: 18px !important;
+  box-shadow: 0 8px 24px rgba(17, 17, 17, .25) !important;
+  font-weight: 700 !important;
+}
+
+/* Sidebar active — rose soft */
+.nv.on, .nv.active {
+  background: var(--accent-l) !important;
+  color: var(--accent-d) !important;
+  font-weight: 700 !important;
+  border-radius: 16px !important;
+}
+.nv.on i, .nv.active i { color: var(--accent) !important; }
+
+/* Topbar clean */
+.topbar, .tb, #tb {
+  background: rgba(255, 255, 255, .92) !important;
+  backdrop-filter: blur(16px) saturate(1.4) !important;
+  border-bottom: none !important;
+  box-shadow: 0 1px 0 rgba(17, 17, 17, .04) !important;
+}
+.tb-title {
+  font-weight: 800 !important;
+  letter-spacing: -0.02em !important;
+}
+
+/* Content canvas */
+#content, .content {
+  background: var(--bg) !important;
+}
+
+/* Quick action tiles — soft pastel icons */
+.qa-tile {
+  background: #fff !important;
+  border: none !important;
+  border-radius: 20px !important;
+  box-shadow: var(--shad) !important;
+  padding: 14px 8px !important;
+}
+.qa-icon {
+  width: 48px !important;
+  height: 48px !important;
+  border-radius: 16px !important;
+}
+
+/* Tabs as soft pills */
+.tabs {
+  background: transparent !important;
+  border: none !important;
+  gap: 8px !important;
+  padding: 4px 0 12px !important;
+  border-bottom: none !important;
+  overflow-x: auto !important;
+}
+.tab, .tabs .tab {
+  background: #fff !important;
+  border: none !important;
+  border-radius: 999px !important;
+  color: var(--tx2) !important;
+  font-weight: 650 !important;
+  font-size: 13px !important;
+  padding: 10px 16px !important;
+  box-shadow: var(--shad) !important;
+  min-height: 40px !important;
+}
+.tab.on, .tabs .tab.on, .tab.active {
+  background: #111 !important;
+  color: #fff !important;
+  box-shadow: 0 4px 12px rgba(17, 17, 17, .18) !important;
+}
+.tab.on::after, .tabs .tab.on::after { display: none !important; }
+
+/* Inputs soft */
+input:not([type="checkbox"]):not([type="radio"]),
+select, textarea {
+  border-radius: 14px !important;
+  border: 1.5px solid var(--bdr) !important;
+  background: #fff !important;
+  box-shadow: none !important;
+}
+input:focus, select:focus, textarea:focus {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 3px var(--accent-l) !important;
+}
+
+/* Progress rings / bars soft */
+.progress, [class*="progress-bar"] {
+  border-radius: 999px !important;
+  height: 8px !important;
+  background: var(--sur3) !important;
+}
+
+/* ── Mobile shell matching mockup ── */
+@media (max-width: 900px) {
+  :root {
+    --tbh: 60px;
+    --bg: #F6F4F2;
+  }
+
+  .scr#sApp { background: #F6F4F2 !important; }
+
+  .topbar, .tb, #tb {
+    height: calc(56px + env(safe-area-inset-top, 0px)) !important;
+    padding: env(safe-area-inset-top, 0px) 12px 0 8px !important;
+    background: rgba(246, 244, 242, .92) !important;
+    box-shadow: none !important;
+  }
+  .tb-title {
+    font-size: 22px !important;
+    font-weight: 800 !important;
+    color: #111 !important;
+  }
+  .ham, .ico-btn {
+    width: 42px !important;
+    height: 42px !important;
+    border: none !important;
+    background: #fff !important;
+    border-radius: 14px !important;
+    box-shadow: var(--shad) !important;
+    color: #111 !important;
+  }
+
+  #content, .content {
+    padding: 8px 14px calc(96px + env(safe-area-inset-bottom, 0px)) !important;
+    background: #F6F4F2 !important;
+  }
+
+  /* Greeting-style module headers */
+  .mod-title {
+    font-size: 22px !important;
+    font-weight: 800 !important;
+    letter-spacing: -0.03em !important;
+    color: #111 !important;
+  }
+  .mod-sub {
+    font-size: 13px !important;
+    color: var(--tx3) !important;
+    font-weight: 500 !important;
+  }
+
+  /* KPI grid soft */
+  .krow {
+    gap: 10px !important;
+  }
+  .kpi {
+    min-height: 108px !important;
+    padding: 14px !important;
+  }
+  .kpi-val { font-size: 22px !important; }
+
+  /* Soft list rows for checklist / tasks */
+  #ckList > div, .anim-item, .dcard {
+    background: #fff !important;
+    border: none !important;
+    border-radius: 18px !important;
+    box-shadow: var(--shad) !important;
+    margin-bottom: 10px !important;
+    padding: 12px 14px !important;
+  }
+
+  /* Bottom nav — floating bar + center FAB */
+  .mob-nav {
+    display: block !important;
+    position: fixed !important;
+    left: 12px !important;
+    right: 12px !important;
+    bottom: calc(10px + env(safe-area-inset-bottom, 0px)) !important;
+    z-index: 400 !important;
+    background: #fff !important;
+    border: none !important;
+    border-radius: 28px !important;
+    box-shadow: 0 8px 32px rgba(17, 17, 17, .12), 0 2px 8px rgba(17, 17, 17, .06) !important;
+    padding: 8px 6px !important;
+    height: auto !important;
+  }
+  .mob-nav-inner {
+    display: flex !important;
+    justify-content: space-around !important;
+    align-items: flex-end !important;
+    gap: 0 !important;
+  }
+  .mob-nav-item {
+    flex: 1 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 3px !important;
+    background: transparent !important;
+    border: none !important;
+    color: #9A9A9A !important;
+    font-size: 11px !important;
+    font-weight: 650 !important;
+    padding: 6px 0 4px !important;
+    min-height: 56px !important;
+  }
+  .mob-nav-pill {
+    width: 40px !important;
+    height: 32px !important;
+    border-radius: 14px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    background: transparent !important;
+    font-size: 18px !important;
+    transition: .18s ease;
+  }
+  .mob-nav-item.active {
+    color: #111 !important;
+  }
+  .mob-nav-item.active .mob-nav-pill {
+    background: var(--accent-l) !important;
+    color: var(--accent-d) !important;
+  }
+
+  /* Middle tab = raised FAB (Attend / center action) */
+  .mob-nav-item:nth-child(3) {
+    position: relative;
+    top: -18px;
+  }
+  .mob-nav-item:nth-child(3) .mob-nav-pill {
+    width: 56px !important;
+    height: 56px !important;
+    border-radius: 50% !important;
+    background: #111 !important;
+    color: #fff !important;
+    box-shadow: 0 8px 20px rgba(17, 17, 17, .28) !important;
+    font-size: 20px !important;
+  }
+  .mob-nav-item:nth-child(3).active .mob-nav-pill {
+    background: var(--accent) !important;
+    color: #fff !important;
+    box-shadow: 0 8px 20px rgba(183, 110, 121, .35) !important;
+  }
+  .mob-nav-item:nth-child(3) span:last-child {
+    display: none !important; /* FAB label hidden for clean look */
+  }
+
+  /* Drawer soft */
+  .sb, #sb {
+    background: #fff !important;
+    border-radius: 0 24px 24px 0 !important;
+  }
+  .nv {
+    border-radius: 16px !important;
+    margin: 3px 12px !important;
+  }
+
+  /* Bottom sheets */
+  .modal-ov, .modal-ov.on {
+    align-items: flex-end !important;
+    background: rgba(17, 17, 17, .4) !important;
+  }
+  .modal-box, .modal-box.open, .modal-box.wide, .modal-box.xl {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    border-radius: 28px 28px 0 0 !important;
+    box-shadow: 0 -12px 40px rgba(17, 17, 17, .15) !important;
+  }
+  .modal-box.open::before {
+    content: "" !important;
+    display: block !important;
+    width: 36px !important;
+    height: 4px !important;
+    border-radius: 4px !important;
+    background: #D6D0C8 !important;
+    margin: 10px auto 6px !important;
+  }
+  .modal-title {
+    font-size: 18px !important;
+    font-weight: 800 !important;
+  }
+  .modal-foot .btn {
+    border-radius: 16px !important;
+    flex: 1 !important;
+  }
+
+  /* Snackbar */
+  #toast, #toast.on {
+    left: 16px !important;
+    right: 16px !important;
+    bottom: calc(96px + env(safe-area-inset-bottom, 0px)) !important;
+    top: auto !important;
+    transform: none !important;
+    border-radius: 14px !important;
+    background: #111 !important;
+    color: #fff !important;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .25) !important;
+  }
+
+  /* Filter bars stack */
+  .fbar {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 8px !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+  .fbar > input, .fbar > select, .fbar > .btn {
+    width: 100% !important;
+    border-radius: 14px !important;
+  }
+
+  /* Login */
+  #sLogin.scr.on {
+    background: linear-gradient(160deg, #111 0%, #2a2a2a 55%, #3d3d3d 100%) !important;
+  }
+  #sLogin .lbox {
+    border-radius: 28px !important;
+    border: none !important;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, .35) !important;
+  }
+
+  /* Attendance action chips */
+  .tam-btn {
+    border-radius: 14px !important;
+    font-weight: 700 !important;
+  }
+
+  /* Tables soft */
+  .table-card, .tw {
+    border-radius: 20px !important;
+    overflow: hidden !important;
+    box-shadow: var(--shad) !important;
+    border: none !important;
+  }
+  thead th {
+    background: #FAF8F6 !important;
+    color: var(--tx3) !important;
+    font-weight: 700 !important;
+    text-transform: none !important;
+    letter-spacing: 0 !important;
+  }
+}
+
+/* Desktop: same soft surfaces, keep sidebar */
+@media (min-width: 901px) {
+  #content { background: #F6F4F2 !important; }
+  .card, .kpi, .chart-wrap { border-radius: 22px !important; }
+  .btn:not(.btn-outline):not(.btn-ghost):not(.l-btn) {
+    border-radius: 14px !important;
+  }
+  .nv.on, .nv.active { border-radius: 14px !important; }
 }
