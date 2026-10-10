@@ -3653,16 +3653,22 @@
         tasks = tasks || [];
         var seen = {}; var allList = [];
         tasks.forEach(function (t, idx) {
+          // Accept every shape the backend can send (Code.gs, Vercel snapshot, legacy)
           t.task_name = t.task_name || t.Task_Name || t.task || t.Task || t.name || '';
-          t.task_uid = String(t.task_uid || t.Task_UID || t.uid || t.UID || t.id || t.task_id || '').trim();
-          t.emp_id = String(t.emp_id || t.Emp_ID || t.empId || t.doer_id || '').trim();
-          t.emp_name = t.emp_name || t.Emp_Name || t.employee_name || t.Doer || t.doer_name || '';
-          t.dept = t.dept || t.department || t.Dept || t.Department || '';
+          t.task_uid = String(t.task_uid || t.setup_id || t.setupId || t['Setup Task ID'] || t.Task_UID || t.uid || t.UID || t.id || t.task_id || '').trim();
+          t.emp_id = String(t.emp_id || t.doer_id || t.doerId || t['Doer ID'] || t.Emp_ID || t.empId || '').trim();
+          t.emp_name = t.emp_name || t.doer_name || t.doerName || t['Doer Name'] || t.Emp_Name || t.employee_name || t.Doer || '';
+          t.dept = t.dept || t.department || t.Department || t.Dept || '';
           t.frequency = t.frequency || t.Frequency || t.freq || 'D';
-          t.day_label = t.day_label || t.day_date || t.day_val || '';
+          t.day_date = t.day_date || t.dayDate || t['Day/Date'] || t.day_val || '';
+          t.day_label = t.day_label || t.day_date || '';
+          t.week_day = t.week_day || t.weekDay || t['Week Day'] || '';
+          t.month_day = t.month_day || t.monthDay || t['Month Day'] || '';
+          t.sheet_status = t.sheet_status || t.status || t.Status || '';
+          t.delete_repeated = t.delete_repeated || t.deleteRepeated || t['Delete Repeated Task'] || '';
           // Deduplicate only on real Setup Task ID; keep rows with empty uid separately
           var uid = t.task_uid || ('__row_' + idx);
-          if (!seen[uid]) { seen[uid] = true; allList.push(t); }
+          if (!seen[uid]) { seen[uid] = true; t._i = allList.length; allList.push(t); }
         });
         if (!allList.length) {
           el2.innerHTML = '<div class="empty-state"><i class="fas fa-tasks"></i><h4>No Active Tasks</h4><p>Add a task using the form above.</p></div>';
@@ -3689,22 +3695,6 @@
           _setupLoadErr(e1 || e2);
         });
       });
-    }
-
-    function _tsClearFilter() {
-      var s = document.getElementById('tsSearch');
-      var e = document.getElementById('tsEmp');
-      var f = document.getElementById('tsFreq');
-      if (s) s.value = '';
-      if (e) e.value = e.options[0] ? e.options[0].value : 'all';
-      if (f) f.value = 'all';
-      // Reset ss-wrap display
-      ['tsEmp', 'tsFreq'].forEach(function (id) {
-        var d = document.getElementById('ssd_' + id);
-        var orig = document.getElementById(id);
-        if (d && orig && orig.options[0]) {d.value = orig.options[0].text; d.placeholder = d.value;}
-      });
-      _tsRenderFiltered();
     }
 
     // ── Task Setup: render filter bar once, apply filter to task groups only ──
@@ -3742,6 +3732,26 @@
       el2.innerHTML = barHtml;
     }
 
+    // ── Task Setup · Active Tasks (all Task List columns, expand/collapse, deactivate) ──
+    var _TS_FREQ = {D: 'Daily', W: 'Weekly', F: 'Fortnightly', M: 'Monthly', '2M': 'Every 2 Months', Q: 'Quarterly', '4M': 'Every 4 Months', H: 'Half-yearly', Y: 'Yearly'};
+    var _TS_FCLR = {D: 'var(--P)', W: 'var(--V)', F: 'var(--V)', M: 'var(--O)', '2M': 'var(--O)', Q: 'var(--O)', '4M': 'var(--O)', H: 'var(--R)', Y: 'var(--R)'};
+
+    function _tsOrd(n) {
+      n = parseInt(n, 10); if (isNaN(n)) return '';
+      var v = n % 100, sfx = (v >= 11 && v <= 13) ? 'th' : ({1: 'st', 2: 'nd', 3: 'rd'}[n % 10] || 'th');
+      return n + sfx;
+    }
+
+    // "Plan" chip = when the task repeats + time of day, built from the Task List columns
+    function _tsPlanChip(t, planDt) {
+      var tm = (String(planDt || '').match(/(\d{2}:\d{2}:\d{2})$/) || [])[1] || '';
+      var f = String(t.frequency || 'D').toUpperCase(), when = '';
+      if (t.week_day) when = 'Every ' + t.week_day;
+      else if (t.month_day) when = _tsOrd(t.month_day) + ' of month';
+      else if (f === 'D') when = 'Daily';
+      return (when && tm) ? when + ' · ' + tm : (tm || when);
+    }
+
     function _tsApplyFilter() {
       var el2 = document.getElementById('setupTaskList');
       if (!el2) return;
@@ -3751,7 +3761,7 @@
       var freq = (document.getElementById('tsFreq') || {}).value || 'all';
 
       var filtered = list.filter(function (t) {
-        if (q && t.task_name.toLowerCase().indexOf(q) < 0) return false;
+        if (q && (t.task_name + ' ' + t.emp_name + ' ' + t.dept).toLowerCase().indexOf(q) < 0) return false;
         if (emp !== 'all' && t.emp_id !== emp) return false;
         if (freq !== 'all' && (t.frequency || '').charAt(0).toUpperCase() !== freq) return false;
         return true;
@@ -3764,7 +3774,6 @@
         deptMap[d].push(t);
       });
       var depts = Object.keys(deptMap).sort();
-      var freqColors = {D: 'var(--P)', W: 'var(--V)', F: 'var(--V)', M: 'var(--O)', '2M': 'var(--O)', Q: 'var(--O)'};
 
       var lbl = document.getElementById('tsCountLabel');
       if (lbl) lbl.innerHTML = '<i class="fas fa-layer-group"></i> ' + filtered.length + ' tasks · ' + depts.length + ' depts' +
@@ -3772,15 +3781,20 @@
 
       var grpEl = document.getElementById('tsTaskGroups');
       if (!grpEl) return;
-
       if (!filtered.length) {
         grpEl.innerHTML = '<div style="text-align:center;padding:24px;color:var(--tx3)"><i class="fas fa-filter-circle-xmark" style="font-size:24px;margin-bottom:8px;display:block"></i>No tasks match filters</div>';
         return;
       }
 
-      grpEl.innerHTML = depts.map(function (dept) {
+      function cell(label, val, extra) {
+        var v = (val === null || val === undefined || String(val).trim() === '') ? '—' : String(val);
+        return '<div><span style="color:var(--tx3);font-weight:700">' + label + '</span>' +
+          '<div style="font-weight:700;color:var(--tx);word-break:break-word;' + (extra || '') + '">' + _esc(v) + '</div></div>';
+      }
+
+      grpEl.innerHTML = depts.map(function (dept, di) {
         var items = deptMap[dept];
-        var gid = 'stg_' + dept.replace(/[^a-zA-Z0-9]/g, '_');
+        var gid = 'stg_' + di + '_' + dept.replace(/[^a-zA-Z0-9]/g, '_');
         return '<div style="margin-bottom:10px">' +
           '<div class="ts-dept-hd" data-gid="' + _esc(gid) + '" style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--sur2);border-radius:8px;margin-bottom:6px;cursor:pointer">' +
           '<i class="fas fa-building" style="color:var(--P);font-size:11px"></i>' +
@@ -3788,77 +3802,47 @@
           '<span style="font-size:10px;color:var(--tx3)">(' + items.length + ')</span>' +
           '<i class="fas fa-chevron-down gc" style="margin-left:auto;font-size:10px;color:var(--tx3);transition:transform .2s;transform:rotate(180deg)"></i>' +
           '</div>' +
-          '<div id="' + gid + '">' +
+          '<div id="' + _esc(gid) + '">' +
           items.map(function (t) {
-            var fClr = freqColors[t.frequency] || 'var(--tx3)';
-            var taskId = 'tsi_' + _esc(t.task_uid);
-            // day_label from backend: "8 Aug 2026 2:00 PM" (new), "Monday · 2:00 PM" (weekly),
-            // "8 of month · 2:00 PM" (monthly), or old ISO "2026-03-31T18:30:00.000Z"
-            var rawLabel = t.day_label || t.day_val || '';
-            var planLabel = '';
-            if (rawLabel) {
-              var rs = String(rawLabel).trim();
-              // Corrupted GAS Date.toString with 1899 — take time only
-              if (rs.indexOf('1899') >= 0 || /GMT/i.test(rs)) {
-                var gm = rs.match(/(\d{1,2}):(\d{2})(?::\d{2})?/);
-                if (gm) {
-                  var gh = +gm[1], gmi = +gm[2];
-                  planLabel = (gh % 12 || 12) + ':' + (gmi < 10 ? '0' : '') + gmi + (gh >= 12 ? ' PM' : ' AM');
-                }
-              } else if (rs.indexOf('T') > 0 && /^\d{4}-\d{2}-\d{2}T/.test(rs)) {
-                var pdOld = _parseAnyDate(rs);
-                if (pdOld && !isNaN(pdOld.getTime())) {
-                  var ph = pdOld.getHours(), pm2 = pdOld.getMinutes();
-                  planLabel = (ph % 12 || 12) + ':' + (pm2 < 10 ? '0' : '') + pm2 + (ph >= 12 ? ' PM' : ' AM');
-                }
-              } else if (/^\d{1,2}\/\d{1,2}\/\d{4}/.test(rs)) {
-                // dd/MM/yyyy HH:mm:ss — show time part
-                var tm = rs.match(/(\d{1,2}):(\d{2})/);
-                if (tm) {
-                  var th = +tm[1], tmi = +tm[2];
-                  planLabel = (th % 12 || 12) + ':' + (tmi < 10 ? '0' : '') + tmi + (th >= 12 ? ' PM' : ' AM');
-                } else {
-                  planLabel = rs;
-                }
-              } else {
-                planLabel = rs;
-              }
-            }
-            planLabel = planLabel ? _esc(planLabel) : '';
+            var f = String(t.frequency || 'D');
+            var fClr = _TS_FCLR[f] || 'var(--tx3)';
+            var fLbl = _TS_FREQ[f] ? _TS_FREQ[f] + ' (' + f + ')' : f;
+            var planDt = _fmtDTIST(t.day_date);                // dd/MMM/yyyy HH:mm:ss (IST)
+            var chip = _tsPlanChip(t, planDt);
+            var tid = 'tsi_' + t._i;                           // unique per task (never empty / duplicate)
             return '<div style="border:1px solid var(--bdr);border-radius:8px;margin-bottom:4px;background:var(--bg);overflow:hidden">' +
-              '<div class="ts-task-hd" data-tid="' + _esc(taskId) + '" style="display:flex;align-items:center;gap:10px;padding:10px 12px;cursor:pointer">' +
+              '<div class="ts-task-hd" data-tid="' + tid + '" style="display:flex;align-items:center;gap:10px;padding:10px 12px;cursor:pointer">' +
               '<div style="width:3px;height:28px;background:' + fClr + ';border-radius:2px;flex-shrink:0"></div>' +
               '<div style="flex:1;min-width:0">' +
               '<div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + _esc(t.task_name) + '</div>' +
               '<div style="font-size:10px;color:var(--tx3);margin-top:3px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">' +
               '<span><i class="fas fa-user" style="width:10px"></i> ' + _esc(t.emp_name || t.emp_id) + '</span>' +
-              (planLabel
-                ? '<span style="display:inline-flex;align-items:center;gap:4px;padding:1px 7px;border-radius:6px;background:var(--Pl);color:var(--P);font-weight:800;font-size:10px">' +
-                '<i class="fas fa-clock" style="font-size:9px"></i> Plan: ' + planLabel + '</span>'
-                : '') +
-              '</div>' +
-              '</div>' +
-              '<span style="padding:2px 7px;border-radius:6px;font-size:10px;font-weight:800;background:var(--sur2);color:' + fClr + ';">' + _esc(t.frequency || 'D') + '</span>' +
+              (chip ? '<span style="display:inline-flex;align-items:center;gap:4px;padding:1px 7px;border-radius:6px;background:var(--Pl);color:var(--P);font-weight:800;font-size:10px"><i class="fas fa-clock" style="font-size:9px"></i> ' + _esc(chip) + '</span>' : '') +
+              '</div></div>' +
+              '<span style="padding:2px 7px;border-radius:6px;font-size:10px;font-weight:800;background:var(--sur2);color:' + fClr + '">' + _esc(f) + '</span>' +
               '<i class="fas fa-chevron-down tc" style="color:var(--tx3);font-size:10px;transition:transform .2s;flex-shrink:0"></i>' +
               '</div>' +
-              '<div id="' + taskId + '" style="display:none;padding:12px 14px;border-top:1px solid var(--bdr);background:var(--sur2)">' +
+              '<div id="' + tid + '" style="display:none;padding:12px 14px;border-top:1px solid var(--bdr);background:var(--sur2)">' +
               '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 14px;font-size:11.5px;color:var(--tx2);margin-bottom:10px">' +
-              '<div><span style="color:var(--tx3);font-weight:700">Employee</span><div style="font-weight:700;color:var(--tx)">' + _esc(t.emp_name || t.emp_id || '—') + '</div></div>' +
-              '<div><span style="color:var(--tx3);font-weight:700">Emp ID</span><div style="font-weight:700;color:var(--tx)">' + _esc(t.emp_id || '—') + '</div></div>' +
-              '<div><span style="color:var(--tx3);font-weight:700">Department</span><div style="font-weight:700;color:var(--tx)">' + _esc(t.dept || t.department || '—') + '</div></div>' +
-              '<div><span style="color:var(--tx3);font-weight:700">Frequency</span><div style="font-weight:700;color:var(--tx)">' + _esc(t.frequency || '—') + '</div></div>' +
-              '<div><span style="color:var(--tx3);font-weight:700">Plan Time</span><div style="font-weight:700;color:var(--P)">' + (planLabel || '—') + '</div></div>' +
-              '<div><span style="color:var(--tx3);font-weight:700">Task UID</span><div style="font-weight:600;color:var(--tx3);word-break:break-all;font-size:10px">' + _esc(t.task_uid || t.uid || '—') + '</div></div>' +
-              (t.start_date || t.Start_Date ? '<div><span style="color:var(--tx3);font-weight:700">Start</span><div style="font-weight:700">' + _esc(_fmtDate(t.start_date || t.Start_Date)) + '</div></div>' : '') +
-              (t.end_date || t.End_Date ? '<div><span style="color:var(--tx3);font-weight:700">End</span><div style="font-weight:700">' + _esc(_fmtDate(t.end_date || t.End_Date)) + '</div></div>' : '') +
+              cell('Task', t.task_name) +
+              cell('Doer Name', t.emp_name) +
+              cell('Doer ID', t.emp_id) +
+              cell('Department', t.dept) +
+              cell('Frequency', fLbl) +
+              cell('Day/Date', planDt, 'color:var(--P)') +
+              cell('Week Day', t.week_day) +
+              cell('Month Day', t.month_day) +
+              cell('Status', t.sheet_status) +
+              cell('Delete Repeated Task', t.delete_repeated) +
+              cell('Setup Task ID', t.task_uid, 'font-size:10px;color:var(--tx3)') +
               '</div>' +
-              '<button type="button" class="btn btn-red btn-xs ts-deact-btn" data-uid="' + _esc(t.task_uid || t.uid || '') + '" style="margin-top:4px"><i class="fas fa-trash-alt"></i> Deactivate Task</button>' +
+              '<button type="button" class="btn btn-red btn-xs ts-deact-btn" data-uid="' + _esc(t.task_uid) + '"><i class="fas fa-trash-alt"></i> Deactivate Task</button>' +
               '</div></div>';
           }).join('') +
           '</div></div>';
       }).join('');
 
-      // Single delegated handler on stable parent (prevents stacked listeners)
+      // One delegated handler on the stable parent (no stacked listeners, no inline onclick)
       var root = document.getElementById('setupTaskList');
       if (root && !root._tsBound) {
         root._tsBound = true;
@@ -3866,15 +3850,12 @@
           var db = e.target.closest('.ts-deact-btn');
           if (db) {
             e.preventDefault(); e.stopPropagation();
-            var uid = db.getAttribute('data-uid') || '';
-            if (uid) _deactivateTask(uid);
+            _deactivateTask(db.getAttribute('data-uid') || '');
             return;
           }
           var dh = e.target.closest('.ts-dept-hd');
           if (dh) {
-            e.preventDefault();
-            var gid2 = dh.getAttribute('data-gid');
-            var body = document.getElementById(gid2);
+            var body = document.getElementById(dh.getAttribute('data-gid'));
             if (body) {
               var open = body.style.display !== 'none';
               body.style.display = open ? 'none' : '';
@@ -3885,9 +3866,7 @@
           }
           var th = e.target.closest('.ts-task-hd');
           if (th) {
-            e.preventDefault();
-            var tid = th.getAttribute('data-tid');
-            var detail = document.getElementById(tid);
+            var detail = document.getElementById(th.getAttribute('data-tid'));
             if (detail) {
               var open2 = detail.style.display !== 'none';
               detail.style.display = open2 ? 'none' : '';
@@ -3899,12 +3878,11 @@
       }
     }
 
-
+    // Single definitions (old duplicate copies removed — the last duplicate used to win and break the list)
     function _tsRenderFiltered() {
-      // Legacy alias — re-render bar then apply filter
       var el2 = document.getElementById('setupTaskList');
       if (!el2) return;
-      _tsRenderBar(el2);
+      if (!el2.querySelector('#tsTaskGroups')) {el2.innerHTML = ''; _tsRenderBar(el2);}
       _tsApplyFilter();
       setTimeout(function () {_initSearchSelects(el2);}, 50);
     }
@@ -3916,109 +3894,13 @@
       if (s) s.value = '';
       if (e) e.value = e.options[0] ? e.options[0].value : 'all';
       if (f) f.value = 'all';
-      // Reset ss-wrap display
       ['tsEmp', 'tsFreq'].forEach(function (id) {
         var d = document.getElementById('ssd_' + id);
         var orig = document.getElementById(id);
         if (d && orig && orig.options[0]) {d.value = orig.options[0].text; d.placeholder = d.value;}
       });
-      _tsRenderFiltered();
+      _tsApplyFilter();
     }
-
-    function _tsRenderFiltered() {
-      var el2 = document.getElementById('setupTaskList');
-      if (!el2) return;
-      var list = window._tsAllTasks || [];
-      var q = ((document.getElementById('tsSearch') || {}).value || '').toLowerCase().trim();
-      var emp = (document.getElementById('tsEmp') || {}).value || 'all';
-      var freq = (document.getElementById('tsFreq') || {}).value || 'all';
-
-      var filtered = list.filter(function (t) {
-        if (q && t.task_name.toLowerCase().indexOf(q) < 0) return false;
-        if (emp !== 'all' && t.emp_id !== emp) return false;
-        if (freq !== 'all' && (t.frequency || '').charAt(0).toUpperCase() !== freq) return false;
-        return true;
-      });
-
-      // Group by department
-      var deptMap = {};
-      filtered.forEach(function (t) {
-        var d = t.dept || 'Other';
-        if (!deptMap[d]) deptMap[d] = [];
-        deptMap[d].push(t);
-      });
-      var depts = Object.keys(deptMap).sort();
-      var freqColors = {D: 'var(--P)', W: 'var(--V)', F: 'var(--V)', M: 'var(--O)', '2M': 'var(--O)', Q: 'var(--O)', '4M': 'var(--O)', H: 'var(--R)', Y: 'var(--R)'};
-
-      el2.innerHTML =
-        // Filter bar
-        '<div style="background:var(--sur2);border:1px solid var(--bdr);border-radius:10px;padding:10px 12px;margin-bottom:12px;display:flex;flex-wrap:wrap;gap:8px;align-items:center">' +
-        '<div style="position:relative;flex:1;min-width:140px">' +
-        '<i class="fas fa-search" style="position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--tx3);font-size:11px;pointer-events:none"></i>' +
-        '<input type="text" id="tsSearch" placeholder="Search task name…" oninput="_tsRenderFiltered()" value="' + _esc(q) + '" ' +
-        'style="width:100%;padding:6px 10px 6px 28px;border:1.5px solid var(--bdr);border-radius:8px;font-size:12px;background:var(--bg);color:var(--tx);outline:none;box-sizing:border-box"></div>' +
-        '<div style="display:flex;align-items:center;gap:6px">' +
-        '<span style="font-size:10px;font-weight:800;color:var(--tx3);text-transform:uppercase;white-space:nowrap">Person</span>' +
-        '<select id="tsEmp" class="ana-sel" onchange="_tsRenderFiltered()" style="min-width:130px">' +
-        '<option value="all">All Employees</option>' + _getEmpOptions() +
-        '</select></div>' +
-        '<div style="display:flex;align-items:center;gap:6px">' +
-        '<span style="font-size:10px;font-weight:800;color:var(--tx3);text-transform:uppercase;white-space:nowrap">Freq</span>' +
-        '<select id="tsFreq" class="ana-sel" onchange="_tsRenderFiltered()" style="min-width:90px">' +
-        '<option value="all">All</option><option value="D"' + (freq === 'D' ? ' selected' : '') + '>Daily</option>' +
-        '<option value="W"' + (freq === 'W' ? ' selected' : '') + '>Weekly</option>' +
-        '<option value="F"' + (freq === 'F' ? ' selected' : '') + '>Fortnightly</option>' +
-        '<option value="M"' + (freq === 'M' ? ' selected' : '') + '>Monthly</option>' +
-        '</select></div>' +
-        '<button class="btn btn-sm btn-outline" onclick="_tsClearFilter()" title="Clear"><i class="fas fa-filter-circle-xmark"></i></button>' +
-        '</div>' +
-        // Stats row
-        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">' +
-        '<span style="font-size:11px;font-weight:700;color:var(--tx2)"><i class="fas fa-layer-group"></i> ' + filtered.length + ' tasks · ' + depts.length + ' depts' + (filtered.length < list.length ? ' (filtered from ' + list.length + ')' : '') + '</span>' +
-        '<div style="display:flex;gap:6px">' +
-        '<button class="btn btn-xs btn-outline" onclick="_setupExpandAll(true)" style="min-width:44px;min-height:36px;touch-action:manipulation"><i class="fas fa-expand-alt"></i> All</button>' +
-        '<button class="btn btn-xs btn-outline" onclick="_setupExpandAll(false)" style="min-width:44px;min-height:36px;touch-action:manipulation"><i class="fas fa-compress-alt"></i> None</button>' +
-        '</div></div>' +
-        (!filtered.length ? '<div class="te" style="text-align:center;padding:24px">No tasks match the current filters</div>' :
-          // Dept groups
-          depts.map(function (dept) {
-            var items = deptMap[dept];
-            var gid = 'stg_' + dept.replace(/\s/g, '_');
-            return '<div style="margin-bottom:10px">' +
-              '<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--sur2);border-radius:8px;margin-bottom:6px;cursor:pointer" ' +
-              'onclick="event.preventDefault();var sy=document.getElementById(\'content\').scrollTop;var b=document.getElementById(\'' + gid + '\');b.style.display=b.style.display===\'none\'?\'\':\'none\';this.querySelector(\'.gc\').style.transform=b.style.display===\'none\'?\'\':\'rotate(180deg)\';document.getElementById(\'content\').scrollTop=sy;">' +
-              '<i class="fas fa-building" style="color:var(--P);font-size:11px"></i>' +
-              '<span style="font-size:11px;font-weight:800;color:var(--tx)">' + _esc(dept) + '</span>' +
-              '<span style="font-size:10px;color:var(--tx3)">(' + items.length + ')</span>' +
-              '<i class="fas fa-chevron-down gc" style="margin-left:auto;font-size:10px;color:var(--tx3);transition:transform .2s;transform:rotate(180deg)"></i>' +
-              '</div>' +
-              '<div id="' + gid + '">' +
-              items.map(function (t) {
-                var fClr = freqColors[t.frequency] || 'var(--tx3)';
-                return '<div>' +
-                  '<div style="display:flex;align-items:center;gap:10px;padding:9px 12px;border:1px solid var(--bdr);border-radius:8px;margin-bottom:4px;cursor:pointer;background:var(--bg)"' +
-                  ' onclick="var d=this.nextElementSibling;d.style.display=d.style.display===\'none\' ? \'\':\'none\';this.querySelector(\'.tc\').style.transform=d.style.display===\'none\'?\'\':\'rotate(180deg)\'">' +
-                  '<div style="width:3px;height:28px;background:' + fClr + ';border-radius:2px;flex-shrink:0"></div>' +
-                  '<div style="flex:1;min-width:0">' +
-                  '<div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + _esc(t.task_name) + '</div>' +
-                  '<div style="font-size:10px;color:var(--tx3);margin-top:1px"><i class="fas fa-user" style="width:10px"></i> ' + _esc(t.emp_name || t.emp_id) + '</div>' +
-                  '</div>' +
-                  '<span class="bdg" style="background:var(--sur2);color:' + fClr + ';font-size:9px;padding:2px 7px;flex-shrink:0">' + _freqBadge(t.frequency).replace(/<[^>]+>/g, '') + '</span>' +
-                  '<i class="fas fa-chevron-down tc" style="color:var(--tx3);font-size:10px;transition:transform .2s;flex-shrink:0"></i>' +
-                  '</div>' +
-                  '<div style="display:none;padding:8px 12px 10px;border:1px solid var(--bdr);border-top:none;border-radius:0 0 8px 8px;margin-bottom:4px;background:var(--sur2)">' +
-                  '<div style="font-size:11px;color:var(--tx2);margin-bottom:8px;display:flex;gap:12px;flex-wrap:wrap">' +
-                  '<span><i class="fas fa-id-badge"></i> ' + _esc(t.emp_id) + '</span>' +
-                  '<span><i class="fas fa-building"></i> ' + _esc(t.dept) + '</span>' +
-                  '<span><i class="fas fa-repeat"></i> ' + _esc(t.frequency) + '</span>' +
-                  '</div>' +
-                  '<button class="btn btn-red btn-xs" onclick="_deactivateTask(\'' + _esc(t.task_uid) + '\')" style="margin-top:2px"><i class="fas fa-trash-alt"></i> Deactivate</button>' +
-                  '</div></div>';
-              }).join('') +
-              '</div></div>';
-          }).join(''));
-    }
-
 
     function _setupExpandAll(expand) {
       var ct = document.getElementById('content');
@@ -4198,6 +4080,7 @@
               window._tsAllTasks = window._tsAllTasks.filter(function (x) {
                 return String(x.task_uid || '') !== uid;
               });
+              window._tsAllTasks.forEach(function (x, n) {x._i = n;});
               _tsApplyFilter();
             }
             _loadSetupTasks();
@@ -15152,22 +15035,6 @@ function _loadEmpDetail(empId) {
     }
 
 
-    function _deactivateTask(uid) {
-      _openModal(
-        '<i class="fas fa-trash" style="color:var(--R)"></i> Deactivate Task',
-        '<p style="font-size:14px;color:var(--tx2);line-height:1.6">Remove this task from the recurring list? This cannot be undone. Future checklist rows will also be deleted.</p>',
-        function () {
-          _closeModal();
-          _gasX('deactivateTask', [uid], 30000, function (r) {
-            _toast('Task deactivated — ' + (r.checklistRowsDeleted || 0) + ' checklist rows removed', 'ok');
-            _loadSetupTasks();
-          }, function (e) {
-            _toast('Error: ' + e.message, 'err');
-          });
-        },
-        '<i class="fas fa-trash"></i> Deactivate'
-      );
-    }
 
 
 
