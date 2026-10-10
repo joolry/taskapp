@@ -3070,6 +3070,43 @@
       return timeStr ? prefix + ' ' + timeStr : prefix;
     }
 
+    // ── IST date-time display: dd/MMM/yyyy HH:mm:ss  (e.g. 10/Oct/2026 17:00:00) ──
+    // Strings without timezone are treated as IST wall-clock; ISO "Z"/offset/GMT strings are converted to IST.
+    function _fmtDTIST(v) {
+      if (v === null || v === undefined) return '';
+      var M = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      function p2(n) {return ('0' + n).slice(-2);}
+      function out(y, mo, d, h, mi, sec, hasT) {
+        var r = p2(d) + '/' + M[mo - 1] + '/' + y;
+        return hasT ? r + ' ' + p2(h) + ':' + p2(mi) + ':' + p2(sec) : r;
+      }
+      var s = String(v).trim(), m;
+      if (!s || s === '-' || s === 'undefined' || s === 'null') return '';
+      if (/^\d{1,2}\/[A-Za-z]{3}\/\d{4}/.test(s)) return s;
+      if ((m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:[ T]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?\s*$/)))
+        return out(+m[3], +m[2], +m[1], +(m[4] || 0), +(m[5] || 0), +(m[6] || 0), m[4] !== undefined);
+      if ((m = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?\s*$/)))
+        return out(+m[1], +m[2], +m[3], +(m[4] || 0), +(m[5] || 0), +(m[6] || 0), m[4] !== undefined);
+      var d = new Date(s);
+      if (isNaN(d.getTime())) return s;
+      var f = {};
+      new Intl.DateTimeFormat('en-GB', {timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric',
+        hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false}).formatToParts(d)
+        .forEach(function (x) {f[x.type] = x.value;});
+      return f.day + '/' + f.month + '/' + f.year + ' ' + (f.hour === '24' ? '00' : f.hour) + ':' + f.minute + ':' + f.second;
+    }
+
+    // Plan time of ONE history row = that row's own planned date + the task's time-of-day.
+    function _histPlanTime(l, planMap) {
+      if (l.plan_time) return _fmtDTIST(l.plan_time);
+      var lbl = planMap[l.task_uid] || planMap[l._taskName] || l.scheduled_time || '';
+      var m = String(lbl).match(/(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?/i);
+      if (!m || !l._planDate) return '';
+      var h = +m[1];
+      if (m[4]) {var pm = m[4].toUpperCase() === 'PM'; h = (h % 12) + (pm ? 12 : 0);}
+      return _fmtDTIST(l._planDate + ' ' + ('0' + h).slice(-2) + ':' + m[2] + ':' + (m[3] || '00'));
+    }
+
     function _cmtTransfer(el) {
       var row = el.closest('[data-row]');
       if (!row) return;
@@ -3447,8 +3484,8 @@
           l._planDate = String(rawDate).slice(0, 10);
           l._taskName = l.task_name || l.task || l.name || '';
           l._freq = l.frequency || l.freq || '';
-          l._planTime = planMap[l.task_uid] || planMap[l._taskName] || l.scheduled_time || l.plan_time || '';
-          var rawAct = l.actual_dt || l.actual || l.completed_at || '';
+          l._planTime = _histPlanTime(l, planMap);
+          var rawAct = l.actual_time || l.actual_dt || l.actual || l.completed_at || '';
           l._actual = rawAct ? String(rawAct) : '';
           l._remark = l.remark || l.remarks || '';
           l._emp = l.emp_name || '';
@@ -3496,9 +3533,8 @@
           '</tr></thead><tbody>' +
           filtered.map(function (l) {
             var isDone = l.computed_status === 'Done';
-            var actTime = l._actual ? _tsShort(l._actual) : '';
+            var actTime = l._actual ? _esc(_fmtDTIST(l._actual)) : '';
             var planTimeDisp = l._planTime || '';
-            if (planTimeDisp && planTimeDisp.length > 24) planTimeDisp = _tsShort(planTimeDisp) || planTimeDisp;
             return '<tr>' +
               '<td style="font-weight:700;white-space:nowrap">' + _fmtDate(l._planDate) + '</td>' +
               '<td style="min-width:140px">' + _esc(l._taskName) +
@@ -3516,8 +3552,7 @@
           filtered.map(function (l) {
             var isDone = l.computed_status === 'Done';
             var planTime = l._planTime || '';
-            if (planTime && planTime.length > 24) planTime = _tsShort(planTime) || planTime;
-            var actTime = l._actual ? _tsShort(l._actual) : '';
+            var actTime = l._actual ? _esc(_fmtDTIST(l._actual)) : '';
             return '<div class="card card-nohover" style="padding:12px 14px;margin-bottom:8px">' +
               '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px">' +
               '<div style="font-weight:700;font-size:13px;flex:1;min-width:0;word-break:break-word">' + _esc(l._taskName) + '</div>' +
@@ -3570,8 +3605,8 @@
     function _exportHistory() {
       var logs = _D.histLogs || [];
       if (!logs.length) {_toast('No history to export', 'err'); return;}
-      var rows = [['Date', 'Task Name', 'Frequency', 'Status', 'Completed On']];
-      logs.forEach(function (l) {rows.push([l.date, l.task_name, l.frequency, l.status, l.actual_dt || '']);});
+      var rows = [['Date', 'Task Name', 'Frequency', 'Status', 'Plan Time', 'Completed On']];
+      logs.forEach(function (l) {rows.push([l.date, l.task_name, l.frequency, l.status, l._planTime || '', _fmtDTIST(l._actual || l.actual_dt || '')]);});
       _downloadCSV('task_history_' + _today() + '.csv', rows);
     }
 
