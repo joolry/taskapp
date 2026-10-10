@@ -354,18 +354,28 @@ function buildTaskHistory(snap, doer, empIdArg, fromDate, toDate) {
     .map(l => ({ planned: normDate(l.planned), task_name: String(l.task || ''), status: String(l.status || ''), actual: String(l.actual || ''), frequency: String(l.freq || ''), task_uid: String(l.taskId || l.uid || ''), remark: String(l.remark || '') }))
     .sort((a, b) => b.planned.localeCompare(a.planned));
 }
-function buildDeptTasks(snap, dept) {
-  return (snap.taskList || []).filter(t => !dept || dept === 'All' || String(t.department || '') === dept).map(t => ({
-    setup_id: t.setupId, task_name: t.task, doer_id: t.doerId, doer_name: t.doerName, department: t.department,
-    frequency: t.frequency, week_day: t.weekDay, month_day: t.monthDay, day_date: t.dayDate, status: t.status, start_date: t.startDate
-  }));
+// Task List row -> every column of the sheet, under the keys the app expects (+ legacy keys).
+function mapTaskRow(t) {
+  return {
+    task_uid: t.setupId, task_name: t.task, emp_id: t.doerId, emp_name: t.doerName, dept: t.department,
+    frequency: t.frequency, day_date: t.dayDate, day_label: t.dayDate, week_day: t.weekDay, month_day: t.monthDay,
+    status: t.status, delete_repeated: t.deleteRepeated || '', start_date: t.startDate,
+    // legacy keys (kept so nothing else breaks)
+    setup_id: t.setupId, doer_id: t.doerId, doer_name: t.doerName, department: t.department
+  };
+}
+function buildDeptTasks(snap, doer, dept) {
+  // Same rule as Code.gs getDeptTasks: managers/owners see all, others only their own
+  const mine = isManager(doer) ? '' : empCode(doer);
+  return (snap.taskList || [])
+    .filter(t => !dept || dept === 'All' || String(t.department || '') === dept)
+    .filter(t => !mine || String(t.doerId || '') === mine)
+    .map(mapTaskRow);
 }
 function buildTaskSetup(snap, doer, empIdArg) {
-  const code = empIdArg || empCode(doer);
-  return (snap.taskList || []).filter(t => !code || String(t.doerId || '') === String(code)).map(t => ({
-    setup_id: t.setupId, task_name: t.task, doer_id: t.doerId, doer_name: t.doerName, department: t.department,
-    frequency: t.frequency, week_day: t.weekDay, month_day: t.monthDay, day_date: t.dayDate, status: t.status, start_date: t.startDate
-  }));
+  // Same rule as Code.gs getTaskSetup: manager with no filter sees all, others only their own
+  const code = empIdArg || (isManager(doer) ? '' : empCode(doer));
+  return (snap.taskList || []).filter(t => !code || String(t.doerId || '') === String(code)).map(mapTaskRow);
 }
 function buildCelebrations(snap) {
   const today = snap.today || istToday(), md = today.substring(5), out = [];
@@ -419,7 +429,7 @@ function fromSnapshot(fn, args, email, snap) {
     case 'getRegularizationRequests': return buildRegRequests(snap, doer);
     case 'getWeeklyTasks': return buildWeeklyTasks(snap, doer, args[0], args[1], args[2]);
     case 'getTaskHistory': return buildTaskHistory(snap, doer, args[0], args[1], args[2]);
-    case 'getDeptTasks': return buildDeptTasks(snap, args[0]);
+    case 'getDeptTasks': return buildDeptTasks(snap, doer, args[0]);
     case 'getTaskSetup': return buildTaskSetup(snap, doer, args[0]);
     case 'getTodayCelebrations': return buildCelebrations(snap);
     case 'getRecentActivity': return buildRecentActivity(snap, doer);
