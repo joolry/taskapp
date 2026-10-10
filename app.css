@@ -13738,7 +13738,7 @@ input, textarea, select { -webkit-user-select: text; user-select: text; }
     flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden;
     -webkit-overflow-scrolling: touch; overscroll-behavior-y: contain; scroll-behavior: smooth;
     scrollbar-width: none; scroll-padding-top: 12px;
-    padding: 16px 14px calc(104px + var(--safe-b)) !important;
+    padding: 14px 12px calc(108px + var(--safe-b)) !important;
   }
   #content::-webkit-scrollbar { display: none; }
   #content > * { max-width: 100%; }
@@ -13777,8 +13777,6 @@ input, textarea, select { -webkit-user-select: text; user-select: text; }
   /* Cards + KPI */
   .card { padding: 16px; }
   .kpi { padding: 16px 14px !important; }
-  .kpi-ico { background: var(--accent-l) !important; color: var(--accent-d) !important; border-radius: 14px !important; }
-  body.dark .kpi-ico { color: var(--accent) !important; }
   .kpi-val { font-size: 28px !important; font-weight: 700 !important; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
   .kpi-lbl { font-size: 12px !important; color: var(--tx3) !important; font-weight: 600; }
   .sec-title { font-size: 20px !important; margin: 20px 2px 10px; }
@@ -13933,4 +13931,79 @@ input, textarea, select { -webkit-user-select: text; user-select: text; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
 }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   DASHBOARD POLISH — hero full-bleed, clean surfaces, ink + rose-gold accents
+════════════════════════════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+
+  /* Page canvas: neutral warm-grey so white cards pop (no peach tint anywhere) */
+  body, #sApp, #content, .main { background: #F3F2F0 !important; }
+  body.dark, body.dark #sApp, body.dark #content, body.dark .main { background: #0B0B0C !important; }
+
+  /* Solid, pure surfaces. #content prefix wins over every older rule. */
+  #content .card, #content .kpi, #content .att-punch-card, #content .qa-tile,
+  #content .chart-wrap, #content .table-card, #content .sec-card, #content .lower-card {
+    background: #FFFFFF !important; background-image: none !important;
+    border: 1px solid rgba(17,17,17,.06) !important; border-radius: 22px !important;
+    box-shadow: 0 1px 2px rgba(17,17,17,.04), 0 8px 24px rgba(17,17,17,.06) !important;
+  }
+  body.dark #content .card, body.dark #content .kpi, body.dark #content .att-punch-card, body.dark #content .qa-tile,
+  body.dark #content .chart-wrap, body.dark #content .table-card, body.dark #content .sec-card, body.dark #content .lower-card {
+    background: #151516 !important; border-color: rgba(255,255,255,.07) !important; box-shadow: 0 8px 28px rgba(0,0,0,.45) !important;
+  }
+
+  /* HERO — edge to edge. Old rule forced width:100%, which left the right side short. */
+  #content > div[style*="margin:-14px -12px 0"] {
+    width: calc(100% + 24px) !important; max-width: none !important;
+    margin: -14px -12px 0 !important; box-sizing: border-box !important;
+    padding: 26px 22px 54px !important; border-radius: 0 0 34px 34px !important;
+    background:
+      radial-gradient(90% 70% at 100% 0%, rgba(183,110,121,.55) 0%, rgba(183,110,121,0) 62%),
+      radial-gradient(70% 60% at 0% 100%, rgba(255,255,255,.07) 0%, rgba(255,255,255,0) 60%),
+      linear-gradient(165deg, #231A1D 0%, #111111 55%, #050505 100%) !important;
+    box-shadow: 0 18px 40px rgba(17,17,17,.22) !important;
+  }
+  #content > div[style*="margin:-14px -12px 0"] div[style*="font-size:30px"] {
+    font-family: var(--serif) !important; font-size: 40px !important; font-weight: 700 !important;
+    letter-spacing: -.01em !important; line-height: 1.05 !important; text-shadow: none !important;
+  }
+  #content > div[style*="margin:-14px -12px 0"] div[style*="font-size:12px"] { color: #E6B7BE !important; font-weight: 600 !important; letter-spacing: .06em !important; }
+
+  /* Attendance card + primary action */
+  .att-punch-card { padding: 18px !important; margin-top: -26px; position: relative; z-index: 2; }
+  .att-punch-title { color: var(--tx3) !important; font-weight: 700 !important; letter-spacing: .08em !important; font-size: 11px !important; }
+  .att-punch-status { font-family: var(--serif); font-size: 24px !important; font-weight: 700 !important; color: var(--tx) !important; }
+  .att-punch-card .btn-checkin, .btn-checkin {
+    width: 100% !important; min-height: 56px !important; border: 0 !important; border-radius: 18px !important;
+    background: linear-gradient(180deg, #2B2B2B 0%, #111111 100%) !important; color: #fff !important;
+    font-size: 15.5px !important; font-weight: 700 !important; letter-spacing: .03em !important;
+    box-shadow: 0 12px 26px rgba(17,17,17,.28), inset 0 0 0 1px rgba(183,110,121,.45), inset 0 1px 0 rgba(255,255,255,.12) !important;
+  }
+  .att-punch-card .btn-checkin i, .btn-checkin i { color: #F1BCC4 !important; }
+  .att-punch-card .btn-checkin:active { transform: scale(.98) !important; }
+
+  /* KPI tiles — no coloured top bar or muddy blobs; semantic icon chips */
+  .kpi::after, .kpi::before { display: none !important; content: none !important; }
+  #content .kpi { padding: 18px 16px !important; min-height: 128px; }
+  .kpi-ico { width: 44px !important; height: 44px !important; border-radius: 14px !important; margin-bottom: 14px !important;
+    background: var(--kib, var(--Pl)) !important; color: var(--kc, var(--P)) !important; font-size: 17px !important; }
+  .kpi-val { font-size: 32px !important; font-weight: 700 !important; letter-spacing: -.03em !important; color: var(--tx) !important; line-height: 1; }
+  .kpi-lbl { margin-top: 6px; font-size: 12px !important; font-weight: 600 !important; color: var(--tx3) !important; }
+  .kpi-bar-wrap { height: 5px !important; border-radius: 999px !important; background: #EEEAE6 !important; margin-top: 12px !important; }
+  .kpi-bar { border-radius: 999px !important; background: linear-gradient(90deg, #B76E79, #E3A5AE) !important; }
+
+  /* Quick actions — one cohesive ink tile family */
+  #content .qa-tile { padding: 16px 8px 14px !important; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .qa-icon { width: 52px !important; height: 52px !important; border-radius: 17px !important;
+    background: linear-gradient(145deg, #2E2E2E 0%, #111111 100%) !important; color: #F1BCC4 !important; font-size: 19px !important;
+    box-shadow: 0 8px 18px rgba(17,17,17,.22), inset 0 1px 0 rgba(255,255,255,.14) !important; }
+  .qa-lbl { font-size: 12.5px !important; font-weight: 700 !important; color: var(--tx) !important; letter-spacing: 0 !important; }
+  .qa-tile:active { transform: scale(.97); }
+
+  /* Header bar — clean, no tint */
+  .topbar { background: rgba(255,255,255,.92) !important; }
+  body.dark .topbar { background: rgba(11,11,12,.9) !important; }
+}
+
 /* ═══════════════ END JOOLRY NATIVE APP LAYER ═══════════════ */
