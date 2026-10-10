@@ -434,9 +434,10 @@ function applyWritePatch(fn, clientArgs, gasResult, email) {
       const uid = String(clientArgs[0] || '');
       const before = snap.taskList.length;
       snap.taskList = snap.taskList.filter(t => String(t.setupId || '') !== uid);
-      snap.checklistToday.forEach(t => {
-        if (String(t.taskId || t.uid || '') === uid) t.status = 'Inactive';
-      });
+      // Code.gs deletes these rows from the sheets, so drop them here too (match task id or its UID)
+      const gone = (t) => String(t.uid || '') === uid || String(t.taskId || '') === uid || String(t.taskId || '').indexOf(uid + '_') === 0;
+      snap.checklistToday = snap.checklistToday.filter(t => !gone(t));
+      if (Array.isArray(snap.checklistRecent)) snap.checklistRecent = snap.checklistRecent.filter(t => !gone(t));
       return snap.taskList.length !== before || true;
     }
 
@@ -605,6 +606,29 @@ function applyWritePatch(fn, clientArgs, gasResult, email) {
   });
 }
 
+// Writes that add/remove checklist rows in the sheets. The sheet is the truth, so after these we
+// re-read just Checklist_Today + Task List (light GAS call) and patch the snapshot — Today, Week,
+// Team, History and Task Setup all see the change at once, with real row numbers.
+const CHECKLIST_WRITES = new Set(['saveNewTask', 'deactivateTask', 'portalDeleteTask', 'portalGenerateChecklist']);
+async function refreshChecklistPart() {
+  try {
+    const part = await callGas('getSnapshotPart', [['checklistToday', 'taskList']], true);
+    if (!part || part.success === false || !Array.isArray(part.checklistToday) || !Array.isArray(part.taskList)) return false;
+    return await patchSnap((snap) => {
+      // Guard: a failed sheet read comes back empty — never blank a good snapshot with it
+      if (!part.checklistToday.length && (snap.checklistToday || []).length > 20) return false;
+      if (!part.taskList.length && (snap.taskList || []).length > 20) return false;
+      snap.checklistToday = part.checklistToday;
+      snap.checklistRecent = part.checklistToday.slice();
+      snap.taskList = part.taskList;
+      return true;
+    });
+  } catch (e) {
+    console.error('refreshChecklistPart', e.message);
+    return false;
+  }
+}
+
 async function tryGlobalSnap(fn, args, email, meta) {
   if (!SNAPSHOT_READS.has(fn)) return undefined;
   if (process.env.SNAPSHOT !== 'on') return undefined;
@@ -685,6 +709,7 @@ async function handle(fn, args, token, meta) {
     // Instant row patch — primary path (no full getSnapshot)
     const patched = await applyWritePatch(fn, clientArgs, r, s.email);
     meta.snapPatched = !!patched;
+    if (CHECKLIST_WRITES.has(fn)) meta.snapChecklist = await refreshChecklistPart();
     if (!patched) {
       // Unknown write type: careful full rebuild (guarded against empty)
       await rebuildAfterWrite();
