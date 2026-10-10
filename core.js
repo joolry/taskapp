@@ -153,18 +153,26 @@
     // navigation), shows a spinner, then reloads current view
     function _forceRefresh() {
       var cur = window._curView || 'dash';
-      // Clear in-memory cache for non-static data
+      // Clear in-memory cache for non-static data + all Checklist SWR keys
       delete _D.dashStats; delete _D.todayAtt; delete _D.todayTasks;
       delete _D.announcements; delete _D.myDelegations; delete _D.myAtt;
       delete _D.lastFetch;
+      delete _D.weekTasks; delete _D._ckWeekKey;
+      delete _D.teamChecklist; delete _D._ckTeamKey;
+      delete _D.histLogs; delete _D._ckHistKey;
+      delete _D._ckTodayKey;
+      window._tsAllTasks = null;
       _D.lastFetch = null;
+      _lcClear();
+      // Instant UI: reload current view; snapshot/GAS will refill caches
       _gas('getDashboardStatsFresh', [], function (d) {
-        if (!d) return;
-        if (d.dashStats) _D.dashStats = d.dashStats;
-        if (d.todayAtt) _D.todayAtt = d.todayAtt;
-        if (d.announcements) _D.announcements = d.announcements;
-        if (d.myDelegations) _D.myDelegations = d.myDelegations;
-        _D.lastFetch = Date.now();
+        if (d) {
+          if (d.dashStats) _D.dashStats = d.dashStats;
+          if (d.todayAtt) _D.todayAtt = d.todayAtt;
+          if (d.announcements) _D.announcements = d.announcements;
+          if (d.myDelegations) _D.myDelegations = d.myDelegations;
+          _D.lastFetch = Date.now();
+        }
         _loadV(cur);
       }, function () {_loadV(cur);});
     }
@@ -1594,7 +1602,10 @@
 
       // 2) Today's checklist tasks
       _gas('getTodayTasks', [null, null], function (tasks) {
-        if (tasks) _D.todayTasks = tasks;
+        if (tasks) {
+          _D.todayTasks = tasks;
+          _D._ckTodayKey = String((_U && _U.emp_code) || '') + '|' + _today();
+        }
       }, function () { });
 
       // 3) Leave balance
@@ -3240,11 +3251,30 @@
     function _cmtReload() {
       var root = document.getElementById('cmteamRoot'); if (!root) return;
       _cmtDate = (document.getElementById('cmtDate') || {}).value || _today();
+      if (!_cmtDate) {
+        _cmtDate = _today();
+        var de = document.getElementById('cmtDate');
+        if (de) de.value = _cmtDate;
+      }
       var dept = (document.getElementById('cmtDept') || {}).value || 'all';
-      var l = document.getElementById('cmtList'); if (l) l.innerHTML = _skel(3);
+      var l = document.getElementById('cmtList');
+      var cKey = String(_cmtDate) + '|' + String(dept);
+      var hasCCache = _D.teamChecklist && _D._ckTeamKey === cKey && Array.isArray(_D.teamChecklist);
+      if (hasCCache) {
+        _cmtData = _D.teamChecklist;
+        _renderCmtList();
+      } else if (l) {
+        l.innerHTML = _skel(3);
+      }
       _gas('getTeamChecklistToday', [_cmtDate, dept], function (rows) {
-        _cmtData = rows || []; _renderCmtList();
-      }, function (e) {if (l) l.innerHTML = (e && e.message && e.message.indexOf('Network') > -1) ? '<div style="text-align:center;padding:24px"><div style="font-size:28px;margin-bottom:8px">📡</div><div style="font-weight:700;color:var(--tx);margin-bottom:4px">Connection Error</div><div style="font-size:12px;color:var(--tx2);margin-bottom:12px">Server se connect nahi ho pa raha</div><button class="btn btn-sm" onclick="_forceRefresh()"><i class="fas fa-rotate-right"></i> Retry</button></div>' : '<div class="te">' + _esc(e.message) + '</div>';});
+        _cmtData = rows || [];
+        _D.teamChecklist = _cmtData;
+        _D._ckTeamKey = cKey;
+        _renderCmtList();
+      }, function (e) {
+        if (hasCCache) return;
+        if (l) l.innerHTML = (e && e.message && e.message.indexOf('Network') > -1) ? '<div style="text-align:center;padding:24px"><div style="font-size:28px;margin-bottom:8px">📡</div><div style="font-weight:700;color:var(--tx);margin-bottom:4px">Connection Error</div><div style="font-size:12px;color:var(--tx2);margin-bottom:12px">Server se connect nahi ho pa raha</div><button class="btn btn-sm" onclick="_forceRefresh()"><i class="fas fa-rotate-right"></i> Retry</button></div>' : '<div class="te">' + _esc(e.message) + '</div>';
+      });
     }
     function _cmtMarkDone(el) {
       var row = el.closest('[data-row]');
@@ -3401,7 +3431,9 @@
       var empId = document.getElementById('ckWEmp') ? document.getElementById('ckWEmp').value : _U.emp_code;
       var grid = document.getElementById('ckWGrid');
       if (!grid) return;
-      grid.innerHTML = _skel(2, 'sk-h8');
+      var wKey = String(empId || '') + '|' + wk + '|' + yr;
+      var hasWCache = _D.weekTasks && _D._ckWeekKey === wKey && Array.isArray(_D.weekTasks);
+      if (!hasWCache) grid.innerHTML = _skel(2, 'sk-h8');
 
       if (_isManager() && document.getElementById('ckWEmp') && document.getElementById('ckWEmp').options.length <= 1) {
         _gas('getDoerList', [], function (doers) {
@@ -3411,7 +3443,10 @@
       }
 
       _gas('getWeeklyTasks', [empId, wk, yr], function (days) {
-        if (!days || !days.length) {
+        days = days || [];
+        _D.weekTasks = days;
+        _D._ckWeekKey = wKey;
+        if (!days.length) {
           grid.innerHTML = '<div class="te"><i class="fas fa-calendar-xmark"></i> No tasks found for Week ' + wk + ', ' + yr + '</div>';
           return;
         }
@@ -3608,6 +3643,14 @@
       var rows = [['Date', 'Task Name', 'Frequency', 'Status', 'Plan Time', 'Completed On']];
       logs.forEach(function (l) {rows.push([l.date, l.task_name, l.frequency, l.status, l._planTime || '', _fmtDTIST(l._actual || l.actual_dt || '')]);});
       _downloadCSV('task_history_' + _today() + '.csv', rows);
+    }
+
+    function _ckInvalidateCaches() {
+      delete _D.todayTasks; delete _D._ckTodayKey;
+      delete _D.weekTasks; delete _D._ckWeekKey;
+      delete _D.teamChecklist; delete _D._ckTeamKey;
+      delete _D.histLogs; delete _D._ckHistKey;
+      window._tsAllTasks = null;
     }
 
     function _loadSetupTasks(silent) {
@@ -4060,6 +4103,7 @@
           // Force fresh load of Active Tasks (bypass cache)
           _D.deptTasks = null;
           _tsAddLocal(obj, r);          // appears on screen immediately
+          _ckInvalidateCaches();
           _loadSetupTasks(true);        // silent confirm from server (no skeleton)
         } else {
           _endSub('btnSaveTask');
@@ -4126,6 +4170,7 @@
           _gasX('deactivateTask', [uid], 90000, function (r) {
             delete window._tsBusy[uid];
             _toast('✓ Task deactivated — ' + ((r && r.checklistRowsDeleted) || 0) + ' checklist rows removed', 'ok');
+            _ckInvalidateCaches();
             _loadSetupTasks(true);                                                // silent confirm
           }, function (e) {
             delete window._tsBusy[uid];
@@ -11563,40 +11608,60 @@
        STUB LOADERS — Fallbacks for modules not yet fully implemented
        These are called by _switchTab and prevent console errors.
     ══════════════════════════════════════════════════════════════════════ */
+    function _ckRenderProgress(tasks) {
+      var prog = document.getElementById('ckProgress');
+      if (!prog) return;
+      tasks = tasks || [];
+      var done = tasks.filter(function (t) {return t.status === 'Done';}).length;
+      var total = tasks.length;
+      var pct = total > 0 ? Math.round(done / total * 100) : 0;
+      prog.innerHTML =
+        '<div style="display:flex;align-items:center;gap:14px;background:var(--bg);border:1px solid var(--bdr);border-radius:10px;padding:12px 16px">' +
+        '<div style="flex:1">' +
+        '<div style="display:flex;justify-content:space-between;margin-bottom:6px">' +
+        '<span style="font-size:12px;font-weight:700;color:var(--tx2)">Today\'s Progress</span>' +
+        '<span style="font-size:12px;font-weight:900;color:var(--P)">' + done + ' / ' + total + ' done</span>' +
+        '</div>' +
+        '<div class="pbar-wrap"><div class="pbar" style="width:' + pct + '%;background:' +
+        (pct === 100 ? 'var(--G)' : pct >= 60 ? 'var(--P)' : 'var(--O)') + '"></div></div>' +
+        '</div>' +
+        '<div style="font-size:22px;font-weight:900;color:' +
+        (pct === 100 ? 'var(--G)' : pct >= 60 ? 'var(--P)' : 'var(--O)') + '">' + pct + '%</div>' +
+        '</div>';
+    }
+
     function _loadToday() {
       var empId = document.getElementById('ckEmp') ? document.getElementById('ckEmp').value : (_U ? _U.emp_code : '');
       var date = document.getElementById('ckDate') ? document.getElementById('ckDate').value : _today();
       var el = document.getElementById('ckList');
-      var prog = document.getElementById('ckProgress');
       if (!el) return;
-      el.innerHTML = _skel(4);
 
-      // Past dates read full Checklist history — allow up to 35s
+      // Default date = today when empty
+      if (!date) {
+        date = _today();
+        var de = document.getElementById('ckDate');
+        if (de) de.value = date;
+      }
+
+      // SWR: show cached data instantly when it matches current emp+date
+      var cacheKey = String(empId || '') + '|' + String(date || '');
+      var hasCache = _D.todayTasks && _D._ckTodayKey === cacheKey && Array.isArray(_D.todayTasks);
+      if (hasCache) {
+        _ckRenderProgress(_D.todayTasks);
+        _renderCkList();
+      } else {
+        el.innerHTML = _skel(4);
+      }
+
       _gasX('getTodayTasks', [empId, date], 35000, function (tasks) {
         tasks = tasks || [];
         _D.todayTasks = tasks;
-        var done = tasks.filter(function (t) {return t.status === 'Done';}).length;
-        var total = tasks.length;
-        var pct = total > 0 ? Math.round(done / total * 100) : 0;
-
-        if (prog) {
-          prog.innerHTML =
-            '<div style="display:flex;align-items:center;gap:14px;background:var(--bg);border:1px solid var(--bdr);border-radius:10px;padding:12px 16px">' +
-            '<div style="flex:1">' +
-            '<div style="display:flex;justify-content:space-between;margin-bottom:6px">' +
-            '<span style="font-size:12px;font-weight:700;color:var(--tx2)">Today\'s Progress</span>' +
-            '<span style="font-size:12px;font-weight:900;color:var(--P)">' + done + ' / ' + total + ' done</span>' +
-            '</div>' +
-            '<div class="pbar-wrap"><div class="pbar" style="width:' + pct + '%;background:' +
-            (pct === 100 ? 'var(--G)' : pct >= 60 ? 'var(--P)' : 'var(--O)') + '"></div></div>' +
-            '</div>' +
-            '<div style="font-size:22px;font-weight:900;color:' +
-            (pct === 100 ? 'var(--G)' : pct >= 60 ? 'var(--P)' : 'var(--O)') + '">' + pct + '%</div>' +
-            '</div>';
-        }
-
+        _D._ckTodayKey = cacheKey;
+        _lcSave();
+        _ckRenderProgress(tasks);
         _renderCkList();
       }, function (e) {
+        if (hasCache) return;
         var msg = (e && e.message) ? e.message : 'Server se connect nahi ho pa raha';
         el.innerHTML =
           '<div style="text-align:center;padding:28px 16px">' +
@@ -11838,6 +11903,18 @@
             statusEl.className = (statusEl.className || '').replace(/pending|open|todo/gi, '') + ' done';
           }
 
+          // Optimistically update local cache so SWR stays correct
+          if (Array.isArray(_D.todayTasks)) {
+            _D.todayTasks.forEach(function (t) {
+              if ((t.task_uid && t.task_uid === taskUid) || (t.task_name === taskName && String(t.planned || '').slice(0, 10) === String(date).slice(0, 10))) {
+                t.status = 'Done';
+                t.actual = new Date().toISOString();
+                t.remark = remark || t.remark || '';
+              }
+            });
+            if (typeof _ckRenderProgress === 'function') _ckRenderProgress(_D.todayTasks);
+          }
+
           _gas('markTaskDone', [rowNum, occ, taskUid, taskName, taskPlanned, date, remark], function (r) {
             if (r && r.success === false) {
               // Rollback
@@ -11856,7 +11933,7 @@
               _loadToday();
             } else {
               _toast('✅ Done!', 'ok');
-              // Soft refresh so KPIs / sort sync
+              // Soft refresh so KPIs / sort sync (SWR = instant)
               _loadToday();
             }
           }, function (e) {
