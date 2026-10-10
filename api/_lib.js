@@ -34,7 +34,7 @@ const ALLOWED = new Set([
   'updateCommitmentStatus', 'updateDelegationStatus',
   'updateEmployee', 'updateIncrementAppraisal',
   'updatePayrollStatus', 'validateGpsForAttendance',
-  'getSnapshot'
+  'getSnapshot', 'clientForceSync'
 ]);
 
 // These MUST never wait on GAS when a snapshot exists
@@ -697,6 +697,30 @@ async function handle(fn, args, token, meta) {
       }
     }
     return r;
+  }
+
+  // Authenticated force snapshot rebuild (Refresh page button)
+  if (fn === 'clientForceSync') {
+    const s0 = verify(token);
+    if (!s0) return { success: false, error: 'NOT_AUTHENTICATED' };
+    try {
+      await runSync();
+    } catch (e) {
+      console.error('clientForceSync', e.message);
+    }
+    // Return fresh boot-ish payload from new snap so UI can paint immediately
+    const out = { success: true, synced: true };
+    try {
+      const snapOut = await tryGlobalSnap('getDashboardStatsFresh', [], s0.email, meta);
+      if (snapOut && typeof snapOut === 'object') Object.assign(out, snapOut);
+    } catch (e2) {}
+    try {
+      const tOut = await tryGlobalSnap('getTodayTasks', [null, null], s0.email, meta);
+      if (Array.isArray(tOut)) out.todayTasks = tOut;
+      else if (tOut && Array.isArray(tOut.tasks)) out.todayTasks = tOut.tasks;
+    } catch (e3) {}
+    meta.cache = 'SYNC';
+    return out;
   }
 
   if (!ALLOWED.has(fn)) return { success: false, error: 'Unknown function' };
