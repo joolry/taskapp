@@ -15069,16 +15069,10 @@ function _loadEmpDetail(empId) {
     _toast._t = null;
 
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('sw.js?v=16').then(function (reg) {
+      // sw.js itself deletes every cache that is not its own (activate handler), so no manual purge here.
+      // (The old purge deleted the SW's live cache on EVERY page load -> no instant open.)
+      navigator.serviceWorker.register('sw.js?v=20').then(function (reg) {
         reg.update();
-        // Purge any leftover old caches from previous SW versions
-        if (window.caches) {
-          caches.keys().then(function (keys) {
-            keys.forEach(function (k) {
-              if (k.indexOf('joolry-v16') !== 0) caches.delete(k);
-            });
-          });
-        }
       }).catch(function () { });
     }
 
