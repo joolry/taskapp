@@ -570,46 +570,12 @@
     /* Universal searchable select auto-initialiser.
        After every _loadV() this converts ALL <select> elements in the
        content area to searchable ss-wrap components automatically.
-       MOBILE (≤900px): skip conversion — use native OS picker (always works).
-       Desktop: custom searchable dropdown. */
+       Mobile (≤900px): DO NOT convert — keep native OS picker (reliable). */
     function _initSearchSelects(root) {
       var ct = root || document.getElementById('content');
       if (!ct) return;
-      // Mobile phones: keep native <select> — reliable picker, no portal/clip issues
-      if (window.innerWidth <= 900) {
-        ct.querySelectorAll('select').forEach(function (sel) {
-          // If a previous desktop session left a hidden select + ss-wrap, restore native
-          if (sel.getAttribute('data-ss') === '1') {
-            sel.style.cssText = '';
-            sel.removeAttribute('data-ss');
-            var prev = sel.previousElementSibling;
-            if (prev && prev.classList && prev.classList.contains('ss-wrap')) prev.remove();
-          }
-          sel.style.minHeight = '44px';
-          sel.style.fontSize = '16px';
-          sel.style.width = '100%';
-          sel.style.maxWidth = '100%';
-          sel.style.display = '';
-          sel.style.opacity = '1';
-          sel.style.visibility = 'visible';
-          sel.style.pointerEvents = 'auto';
-          sel.style.position = 'static';
-        });
-        // Remove any orphan ss-wraps left without a select pair
-        ct.querySelectorAll('.ss-wrap').forEach(function (w) {
-          var id = w.getAttribute('data-selref') || w.getAttribute('data-id');
-          var sel = id ? document.getElementById(id) : null;
-          if (!sel || sel.tagName !== 'SELECT') {
-            // pure _ssHtml widgets — leave them (handled by portal)
-            return;
-          }
-          // select exists and is visible native — drop the custom wrap
-          if (sel.style.display !== 'none' && !sel.getAttribute('data-ss')) {
-            try { w.remove(); } catch (e) {}
-          }
-        });
-        return;
-      }
+      // Phones/tablets: native <select> always opens. Custom portal is desktop-only.
+      if (window.innerWidth <= 900) return;
       ct.querySelectorAll('select:not([data-ss="1"])').forEach(function (sel) {
         if (sel.closest('.ss-wrap')) return;
         sel.setAttribute('data-ss', '1');
