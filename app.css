@@ -15545,9 +15545,11 @@ input, textarea, select { -webkit-user-select: text; user-select: text; }
   .ss-wrap { position: relative !important; overflow: visible !important; z-index: 1; }
   .ss-wrap:focus-within { z-index: 50; }
 
-  /* Modal: full width, no right cut */
-  #mOv.modal-ov,
-  #mOv,
+  /* Modal: ONLY when open — never force-show closed overlay */
+  #mOv.modal-ov {
+    display: none !important;
+  }
+  #mOv.modal-ov.on,
   .modal-ov.on {
     display: flex !important;
     align-items: flex-end !important;
@@ -15556,8 +15558,12 @@ input, textarea, select { -webkit-user-select: text; user-select: text; }
     inset: 0 !important;
     z-index: 5000 !important;
   }
+  #modal.modal-box {
+    display: none !important;
+  }
   #modal.modal-box.open,
   .modal-box.open {
+    display: flex !important;
     width: 100% !important;
     max-width: 100% !important;
     min-width: 0 !important;
