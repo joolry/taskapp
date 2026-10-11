@@ -570,12 +570,11 @@
     /* Universal searchable select auto-initialiser.
        After every _loadV() this converts ALL <select> elements in the
        content area to searchable ss-wrap components automatically.
-       Mobile (≤900px): DO NOT convert — keep native OS picker (reliable). */
+       No per-view changes needed - works for every page in the app. */
     function _initSearchSelects(root) {
       var ct = root || document.getElementById('content');
       if (!ct) return;
-      // Phones/tablets: native <select> always opens. Custom portal is desktop-only.
-      if (window.innerWidth <= 900) return;
+      if (window.innerWidth <= 900) return; /* mobile: native OS picker */
       ct.querySelectorAll('select:not([data-ss="1"])').forEach(function (sel) {
         if (sel.closest('.ss-wrap')) return;
         sel.setAttribute('data-ss', '1');
