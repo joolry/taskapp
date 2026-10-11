@@ -15636,38 +15636,29 @@ input, textarea, select { -webkit-user-select: text; user-select: text; }
   to { background-position: -200% 0; }
 }
 
-/* ════════════════════════════════════════════════════════════════════════════
-   MOBILE NATIVE SELECTS (v31) — dropdowns always work on phones
-════════════════════════════════════════════════════════════════════════════ */
+/* Mobile: native selects must always be tappable (v32) */
 @media (max-width: 900px) {
-  /* Show real <select> — custom ss layer disabled on mobile via JS */
   #content select,
   .modal-body select,
   .modal-box select,
   #csetupPane select,
+  #dcrPane select,
+  #dminePane select,
+  #dbymePane select,
   #ctodayPane select,
   #cweekPane select,
-  #chistPane select,
-  #dminePane select,
-  #dbymePane select {
+  #chistPane select {
     display: block !important;
     position: static !important;
     width: 100% !important;
     max-width: 100% !important;
-    min-width: 0 !important;
     min-height: 44px !important;
-    height: auto !important;
     opacity: 1 !important;
     visibility: visible !important;
     pointer-events: auto !important;
     font-size: 16px !important;
-    box-sizing: border-box !important;
     -webkit-appearance: menulist !important;
     appearance: menulist !important;
   }
-  /* Hide leftover custom wraps that sit next to a live native select */
-  #content .ss-wrap:has(+ select:not([data-ss="1"])),
-  .modal-body .ss-wrap:has(+ select:not([data-ss="1"])) {
-    display: none !important;
-  }
+  /* Hide custom dropdown layer if any leftover */
 }
