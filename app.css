@@ -15450,29 +15450,24 @@ input, textarea, select { -webkit-user-select: text; user-select: text; }
   #csetupPane .ss-wrap:has(.ss-inp.ss-open) {
     z-index: 6000 !important;
   }
-  #csetupPane .ss-list {
-    display: none !important;
-  }
+  #csetupPane .ss-list,
   #csetupPane .ss-list.ss-open {
-    display: flex !important;
-    flex-direction: column !important;
     position: absolute !important;
     left: 0 !important;
     right: 0 !important;
     top: calc(100% + 4px) !important;
     z-index: 7000 !important;
     max-height: min(240px, 50vh) !important;
-    overflow-x: hidden !important;
     overflow-y: auto !important;
     -webkit-overflow-scrolling: touch !important;
     background: var(--sur, #fff) !important;
     border: 1px solid var(--bdr) !important;
     border-radius: 12px !important;
     box-shadow: 0 12px 28px rgba(0,0,0,.18) !important;
-    width: 100% !important;
-    min-width: 100% !important;
-    box-sizing: border-box !important;
+    display: block !important;
   }
+  /* when closed, hide */
+  /* closed list hide handled by JS portal */
 
   /* Native select fallback always usable */
   #csetupPane select {
@@ -15518,10 +15513,8 @@ input, textarea, select { -webkit-user-select: text; user-select: text; }
    DROPDOWN + MODAL + PTR polish (v11)
 ════════════════════════════════════════════════════════════════════════════ */
 @media (max-width: 900px) {
-  /* Portal dropdown on body — only when open, full usable width */
-  body > .ss-list:not(.ss-open) {
-    display: none !important;
-  }
+  /* Portal dropdown on body — never clip / never force-hide when open */
+  body > .ss-list,
   body > .ss-list.ss-open,
   .ss-list.ss-open {
     display: flex !important;
@@ -15530,28 +15523,16 @@ input, textarea, select { -webkit-user-select: text; user-select: text; }
     z-index: 2147483647 !important;
     max-height: min(280px, 45vh) !important;
     overflow: hidden !important;
-    overflow-x: hidden !important;
     -webkit-overflow-scrolling: touch !important;
     pointer-events: auto !important;
     visibility: visible !important;
     opacity: 1 !important;
-    box-sizing: border-box !important;
   }
-  body > .ss-list.ss-open .ss-opts,
+  body > .ss-list .ss-opts,
   .ss-list.ss-open .ss-opts {
     overflow-y: auto !important;
-    overflow-x: hidden !important;
     flex: 1 1 auto !important;
     max-height: 220px !important;
-  }
-  body > .ss-list.ss-open .ss-opt,
-  .ss-list.ss-open .ss-opt {
-    white-space: normal !important;
-    word-break: break-word !important;
-    overflow: hidden !important;
-    text-overflow: ellipsis !important;
-    max-width: 100% !important;
-    box-sizing: border-box !important;
   }
 
   /* Forms / cards that host selects */
@@ -15653,4 +15634,40 @@ input, textarea, select { -webkit-user-select: text; user-select: text; }
 @keyframes ptrSlide {
   from { background-position: 200% 0; }
   to { background-position: -200% 0; }
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   MOBILE NATIVE SELECTS (v31) — dropdowns always work on phones
+════════════════════════════════════════════════════════════════════════════ */
+@media (max-width: 900px) {
+  /* Show real <select> — custom ss layer disabled on mobile via JS */
+  #content select,
+  .modal-body select,
+  .modal-box select,
+  #csetupPane select,
+  #ctodayPane select,
+  #cweekPane select,
+  #chistPane select,
+  #dminePane select,
+  #dbymePane select {
+    display: block !important;
+    position: static !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    min-height: 44px !important;
+    height: auto !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    pointer-events: auto !important;
+    font-size: 16px !important;
+    box-sizing: border-box !important;
+    -webkit-appearance: menulist !important;
+    appearance: menulist !important;
+  }
+  /* Hide leftover custom wraps that sit next to a live native select */
+  #content .ss-wrap:has(+ select:not([data-ss="1"])),
+  .modal-body .ss-wrap:has(+ select:not([data-ss="1"])) {
+    display: none !important;
+  }
 }
