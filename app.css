@@ -13254,7 +13254,7 @@
   .btn, button.btn, .btn-sm {
     min-height: 44px; padding: 10px 16px !important;
   }
-  .sb { display: none !important; }
+  /* NEVER hide .sb on mobile — drawer uses transform + .mob-open (see final layer) */
   .mob-nav {
     display: flex !important;
     padding-bottom: env(safe-area-inset-bottom, 0px);
@@ -14006,36 +14006,113 @@ input, textarea, select { -webkit-user-select: text; user-select: text; }
 
 
 /* ════════════════════════════════════════════════════════════════════════════
-   v3 — FIXES + REDESIGN
-   1) Drawer: old rule `.sb{display:none!important}` (≤768px) hid the menu, only the blur showed.
-   2) Tab bar: old `.mob-nav{display:flex}` shrank the inner row to content → off-centre.
-   3) Hero: floating card (consistent 12px inset everywhere), editorial serif numerals.
+   v4 — DRAWER FIX (critical)
+   Root cause: `.sb{display:none!important}` on ≤768px hid the menu; only blur showed.
+   Fix: drawer always display:flex; off-screen via translateX; .mob-open slides in.
+   No visibility:hidden (breaks on some WebViews). Soft overlay, correct z-index.
 ════════════════════════════════════════════════════════════════════════════ */
-@media (max-width: 768px) {
+@media (max-width: 900px) {
 
-  /* ── Drawer (always above overlay; display forced back on) ── */
-  #sApp .sb {
-    display: flex !important; flex-direction: column;
-    position: fixed !important; top: 0 !important; left: 0 !important; bottom: 0 !important;
-    height: 100% !important; width: min(84vw, 320px) !important; min-width: 0 !important; max-width: 320px !important;
-    z-index: 2000 !important; background: var(--sb) !important;
-    border: 0 !important; border-radius: 0 30px 30px 0 !important; box-shadow: none !important;
-    transform: translateX(-105%) !important; visibility: hidden;
-    transition: transform .4s var(--ease), visibility 0s linear .4s, box-shadow .4s !important;
-    overflow-y: auto !important; overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
+  /* ── Drawer: always in DOM, slide with transform only ── */
+  #sApp .sb,
+  .sb#sb,
+  aside.sb {
+    display: flex !important;
+    flex-direction: column !important;
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    bottom: 0 !important;
+    height: 100% !important;
+    height: 100dvh !important;
+    width: min(86vw, 300px) !important;
+    min-width: 0 !important;
+    max-width: 300px !important;
+    z-index: 2000 !important;
+    background: var(--sb, #fff) !important;
+    border: 0 !important;
+    border-radius: 0 24px 24px 0 !important;
+    box-shadow: none !important;
+    transform: translate3d(-105%, 0, 0) !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+    transition: transform .32s cubic-bezier(.32, .72, 0, 1), box-shadow .32s ease !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    padding-top: env(safe-area-inset-top, 0px);
+    /* isolation: overlay backdrop-filter must NOT blur the panel itself */
+    isolation: isolate !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    filter: none !important;
   }
-  #sApp .sb.mob-open {
-    transform: translateX(0) !important; visibility: visible;
-    transition: transform .4s var(--ease), visibility 0s, box-shadow .4s !important;
-    box-shadow: 24px 0 64px rgba(17,17,17,.32) !important;
+  #sApp .sb.mob-open,
+  .sb#sb.mob-open,
+  aside.sb.mob-open {
+    transform: translate3d(0, 0, 0) !important;
+    box-shadow: 16px 0 48px rgba(17, 17, 17, .28) !important;
   }
-  #mobOv, #sbOverlay, .mob-ov, .sb-overlay { z-index: 1900 !important; background: rgba(17,17,17,.5) !important; -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); }
-  #mobOv.on, #sbOverlay.on, .mob-ov.on, .sb-overlay.on { display: block !important; opacity: 1 !important; pointer-events: auto !important; }
-  .sb-hd { padding: calc(20px + var(--safe-t)) 16px 14px !important; border-bottom: 1px solid var(--bdr); }
-  .sb-prof { background: var(--sur2) !important; border: 1px solid var(--bdr); border-radius: 18px !important; padding: 12px !important; }
-  .sb-ava { background: linear-gradient(145deg,#2E2E2E,#111) !important; color: #F1BCC4 !important; }
+
+  /* Overlay: soft dim, light blur — not heavy blur that feels broken */
+  #mobOv,
+  #sbOverlay,
+  .mob-ov,
+  .sb-overlay {
+    display: none !important;
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 1900 !important;
+    background: rgba(15, 23, 42, .42) !important;
+    -webkit-backdrop-filter: blur(2px) !important;
+    backdrop-filter: blur(2px) !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+    transition: opacity .28s ease !important;
+  }
+  #mobOv.on,
+  #sbOverlay.on,
+  .mob-ov.on,
+  .sb-overlay.on {
+    display: block !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+  }
+
+  .sb-hd {
+    padding: calc(16px + env(safe-area-inset-top, 0px)) 14px 12px !important;
+    border-bottom: 1px solid var(--bdr) !important;
+    flex-shrink: 0 !important;
+  }
+  .sb-prof {
+    background: var(--sur2) !important;
+    border: 1px solid var(--bdr) !important;
+    border-radius: 14px !important;
+    padding: 10px 12px !important;
+  }
+  .sb-ava {
+    background: linear-gradient(145deg, #2E2E2E, #111) !important;
+    color: #F1BCC4 !important;
+  }
   .sb-name { font-weight: 700 !important; }
-  .sb-role { color: var(--accent-d) !important; font-weight: 600; }
+  .sb-role { color: var(--accent-d, #B76E79) !important; font-weight: 600; }
+
+  /* Hamburger always tappable */
+  .ham,
+  #hamBtn,
+  .ico-btn.ham {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+    min-width: 44px !important;
+    min-height: 44px !important;
+    z-index: 60 !important;
+  }
 
   /* ── Floating tab bar: truly centred, expanding active pill ── */
   .mob-nav {
@@ -14188,6 +14265,217 @@ input, textarea, select { -webkit-user-select: text; user-select: text; }
   .mob-nav .mob-nav-inner > .mob-nav-item:nth-child(3).active { box-shadow: 0 14px 28px rgba(183,110,121,.45), 0 0 0 6px #FFFFFF, inset 0 0 0 1.5px #E3A5AE !important; }
   .mob-nav .mob-nav-inner > .mob-nav-item:nth-child(3) .mob-nav-pill::after { display: none; }
   .mob-nav .mob-nav-inner > .mob-nav-item:nth-child(3):active { transform: scale(.94); }
+}
+
+
+
+
+/* ════════════════════════════════════════════════════════════════════════════
+   CLIENT HANDOVER — MOBILE POLISH v5
+   Tested with staff account on phone viewport.
+   Fixes: drawer, profile grid, filter whitespace, bottom-nav cut-off,
+   tabs, attendance month field, content padding.
+════════════════════════════════════════════════════════════════════════════ */
+@media (max-width: 900px) {
+
+  /* ── Content never under bottom nav ── */
+  #content, .content {
+    width: 100% !important;
+    max-width: 100vw !important;
+    box-sizing: border-box !important;
+    padding: 12px 12px calc(110px + env(safe-area-inset-bottom, 0px)) !important;
+    overflow-x: hidden !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+
+  /* ── Topbar ── */
+  .topbar, #tb, .tb {
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 80 !important;
+    min-height: calc(52px + env(safe-area-inset-top, 0px)) !important;
+    padding: env(safe-area-inset-top, 0px) 10px 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    background: rgba(255,255,255,.96) !important;
+    -webkit-backdrop-filter: blur(12px) !important;
+    backdrop-filter: blur(12px) !important;
+  }
+  body.dark .topbar { background: rgba(11,18,32,.96) !important; }
+  .tb-left, .tb-right {
+    display: flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    min-height: 52px !important;
+  }
+  .tb-title { font-size: 16px !important; font-weight: 800 !important; }
+  .tb-breadcrumb, .tb-search, .tb-divider, .sb-toggle { display: none !important; }
+  .ham, #hamBtn {
+    display: flex !important;
+    min-width: 44px !important;
+    min-height: 44px !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+
+  /* ── Profile: force single column (JS uses 640 breakpoint; CSS covers up to 900) ── */
+  #content > div[style*="grid-template-columns"],
+  #content div[style*="grid-template-columns:300px"],
+  #content div[style*="grid-template-columns: 300px"] {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 14px !important;
+  }
+
+  /* ── Module headers ── */
+  .mod-head, .mod-header {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    align-items: flex-start !important;
+    gap: 8px !important;
+    margin-bottom: 12px !important;
+  }
+  .mod-title { font-size: 18px !important; font-weight: 800 !important; }
+  .mod-sub { font-size: 12px !important; color: var(--tx3) !important; width: 100% !important; }
+
+  /* ── Tabs / pill rows: horizontal scroll, no cut-off ── */
+  .tabs, .tab-row, .ck-tabs, .pill-row,
+  #content > div > div[style*="display:flex"][style*="gap"] {
+    /* leave generic flex alone; target known tab strips */
+  }
+  .tabs, .tab-row, .ck-tabs, .pill-row {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    gap: 6px !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    scrollbar-width: none !important;
+    margin-bottom: 12px !important;
+    padding-bottom: 2px !important;
+  }
+  .tabs::-webkit-scrollbar, .tab-row::-webkit-scrollbar, .ck-tabs::-webkit-scrollbar { display: none !important; }
+  .tabs button, .tab-btn, .ck-tab, .pill {
+    flex-shrink: 0 !important;
+    min-height: 38px !important;
+    white-space: nowrap !important;
+  }
+
+  /* ── Filter bars compact ── */
+  .fbar, .filter-row, [id$="Filters"], #cmtFilters, #tamFilters {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    align-items: flex-end !important;
+    gap: 10px !important;
+    margin-bottom: 12px !important;
+  }
+  .fbar .fgrp, .fbar > div, .filter-row .fgrp {
+    flex: 1 1 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+  .frow {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 12px !important;
+  }
+  .frow .fgrp { width: 100% !important; flex: none !important; }
+
+  /* Searchable select — kill huge empty height on mobile */
+  .ss-wrap {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-height: 0 !important;
+    height: auto !important;
+  }
+  .ss-wrap .ss-inp,
+  .ss-wrap input {
+    width: 100% !important;
+    min-height: 44px !important;
+    font-size: 16px !important;
+  }
+  .ss-list {
+    max-height: 240px !important;
+    z-index: 5000 !important;
+  }
+  /* Checklist employee / date cards — no giant blank area */
+  #content .card .ss-wrap,
+  #content label + .ss-wrap,
+  #content .fgrp .ss-wrap {
+    margin: 0 !important;
+  }
+  #content .card {
+    overflow: visible !important;
+  }
+
+  /* Inputs: full width, iOS no-zoom */
+  input, select, textarea, .ana-sel, .tam-sel {
+    max-width: 100% !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    font-size: 16px !important;
+    min-height: 44px !important;
+  }
+  input[type="month"], input[type="date"] {
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+
+  /* KPI / stats grids */
+  .krow, #dashKrow {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 10px !important;
+  }
+  .kpi { min-height: 100px !important; padding: 14px 12px !important; }
+  .kpi-val { font-size: 26px !important; }
+
+  /* Tables scroll inside wrapper */
+  .tbl-wrap, .table-scroll, .muster-wrap, .table-card {
+    width: 100% !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+
+  /* Sort chips row */
+  [class*="sort"] {
+    flex-wrap: wrap !important;
+  }
+
+  /* Bottom nav clear of content */
+  .mob-nav {
+    z-index: 300 !important;
+  }
+
+  /* Attendance month + buttons row */
+  .att-filter, .att-month-row {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 10px !important;
+    align-items: center !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .krow, #dashKrow { gap: 8px !important; }
+  .kpi-val { font-size: 22px !important; }
+  .mod-title { font-size: 16px !important; }
+  #content, .content {
+    padding: 10px 10px calc(110px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+}
+
+/* Force profile password form fields full width on narrow screens */
+@media (max-width: 900px) {
+  #profPw1, #profPw2 {
+    width: 100% !important;
+  }
+  #content .frow .btn,
+  #content .fgrp .btn {
+    width: 100% !important;
+    min-height: 44px !important;
+  }
 }
 
 /* ═══════════════ END JOOLRY NATIVE APP LAYER ═══════════════ */
