@@ -11527,6 +11527,7 @@
         modal.style.maxHeight = '';
       }
       modal.classList.add('open');
+      ov.classList.add('on');
 
       // Searchable selects inside modal body
       setTimeout(function () {
@@ -11542,8 +11543,14 @@
     function _closeModal() {
       var ov = document.getElementById('mOv');
       var modal = document.getElementById('modal');
-      if (ov) ov.style.display = 'none';
-      if (modal) {modal.style.display = 'none'; modal.classList.remove('open'); modal.classList.remove('wide', 'xl');}
+      if (ov) {
+        ov.style.display = 'none';
+        ov.classList.remove('on');
+      }
+      if (modal) {
+        modal.style.display = 'none';
+        modal.classList.remove('open', 'wide', 'xl');
+      }
     }
 
     /* Close modal on ESC key */
