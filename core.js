@@ -2857,7 +2857,7 @@
 
     var _cmtData = [];  // loaded tasks
     var _cmtDate = '';
-    var _cmtSort = {key: 'name', dir: 1};
+    var _cmtSortState = {key: 'name', dir: 1};
 
     function _loadTeamChecklist() {
       var root = document.getElementById('cmteamRoot');
@@ -2984,9 +2984,9 @@
       var empKeys = eOrder.filter(function (k, i, a) {return a.indexOf(k) === i;});
       empKeys.sort(function (a, b) {
         var ea = byEmp[a], eb = byEmp[b];
-        if (_cmtSort.key === 'dept') {var va = ea.dept.toLowerCase(), vb = eb.dept.toLowerCase(); return va < vb ? -_cmtSort.dir : va > vb ? _cmtSort.dir : 0;}
-        if (_cmtSort.key === 'pend') {var pa = ea.tasks.filter(function (t) {return t.status !== 'Done';}).length, pb = eb.tasks.filter(function (t) {return t.status !== 'Done';}).length; return (pb - pa) * _cmtSort.dir;}
-        return ea.name.toLowerCase() < eb.name.toLowerCase() ? -_cmtSort.dir : ea.name.toLowerCase() > eb.name.toLowerCase() ? _cmtSort.dir : 0;
+        if (_cmtSortState.key === 'dept') {var va = ea.dept.toLowerCase(), vb = eb.dept.toLowerCase(); return va < vb ? -_cmtSortState.dir : va > vb ? _cmtSortState.dir : 0;}
+        if (_cmtSortState.key === 'pend') {var pa = ea.tasks.filter(function (t) {return t.status !== 'Done';}).length, pb = eb.tasks.filter(function (t) {return t.status !== 'Done';}).length; return (pb - pa) * _cmtSortState.dir;}
+        return ea.name.toLowerCase() < eb.name.toLowerCase() ? -_cmtSortState.dir : ea.name.toLowerCase() > eb.name.toLowerCase() ? _cmtSortState.dir : 0;
       });
 
       var html = empKeys.map(function (k, ki) {
@@ -3268,13 +3268,13 @@
       });
     }
     function _cmtSort(key) {
-      if (_cmtSort.key === key) {_cmtSort.dir *= -1;} else {_cmtSort.key = key; _cmtSort.dir = 1;}
+      if (_cmtSortState.key === key) {_cmtSortState.dir *= -1;} else {_cmtSortState.key = key; _cmtSortState.dir = 1;}
       document.querySelectorAll('.ctsb').forEach(function (b) {
         var active = b.id === 'ctsb_' + key;
         b.style.border = '1.5px solid ' + (active ? 'var(--P)' : 'var(--bdr)');
         b.style.background = active ? 'var(--Pl)' : 'var(--bg)';
         b.style.color = active ? 'var(--P)' : 'var(--tx2)';
-        if (active) {var lbls = {name: 'Name', dept: 'Dept', pend: 'Pending Count'}; b.textContent = lbls[key] + (_cmtSort.dir === 1 ? ' ↑' : ' ↓');}
+        if (active) {var lbls = {name: 'Name', dept: 'Dept', pend: 'Pending Count'}; b.textContent = lbls[key] + (_cmtSortState.dir === 1 ? ' ↑' : ' ↓');}
       });
       _renderCmtList();
     }
