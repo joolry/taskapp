@@ -15437,7 +15437,9 @@ input, textarea, select { -webkit-user-select: text; user-select: text; }
   #csetupPane .ss-wrap:has(.ss-inp.ss-open) {
     z-index: 6000 !important;
   }
-  #csetupPane .ss-list,
+  #csetupPane .ss-list {
+    display: none !important;
+  }
   #csetupPane .ss-list.ss-open {
     position: absolute !important;
     left: 0 !important;
@@ -15451,10 +15453,9 @@ input, textarea, select { -webkit-user-select: text; user-select: text; }
     border: 1px solid var(--bdr) !important;
     border-radius: 12px !important;
     box-shadow: 0 12px 28px rgba(0,0,0,.18) !important;
-    display: block !important;
+    display: flex !important;
+    flex-direction: column !important;
   }
-  /* when closed, hide */
-  /* closed list hide handled by JS portal */
 
   /* Native select fallback always usable */
   #csetupPane select {
@@ -15500,8 +15501,7 @@ input, textarea, select { -webkit-user-select: text; user-select: text; }
    DROPDOWN + MODAL + PTR polish (v11)
 ════════════════════════════════════════════════════════════════════════════ */
 @media (max-width: 900px) {
-  /* Portal dropdown on body — never clip / never force-hide when open */
-  body > .ss-list,
+  /* Portal dropdown on body — only when open */
   body > .ss-list.ss-open,
   .ss-list.ss-open {
     display: flex !important;
@@ -15515,7 +15515,10 @@ input, textarea, select { -webkit-user-select: text; user-select: text; }
     visibility: visible !important;
     opacity: 1 !important;
   }
-  body > .ss-list .ss-opts,
+  body > .ss-list:not(.ss-open) {
+    display: none !important;
+  }
+  body > .ss-list.ss-open .ss-opts,
   .ss-list.ss-open .ss-opts {
     overflow-y: auto !important;
     flex: 1 1 auto !important;
@@ -15720,8 +15723,7 @@ input, textarea, select { -webkit-user-select: text; user-select: text; }
     overflow: visible !important;
   }
 
-  /* Portal list on body — always visible when open */
-  body > .ss-list,
+  /* Portal list on body — only when open */
   body > .ss-list.ss-open,
   .ss-list.ss-open {
     display: flex !important;
@@ -15736,7 +15738,10 @@ input, textarea, select { -webkit-user-select: text; user-select: text; }
     opacity: 1 !important;
     box-sizing: border-box !important;
   }
-  body > .ss-list .ss-opts,
+  body > .ss-list:not(.ss-open) {
+    display: none !important;
+  }
+  body > .ss-list.ss-open .ss-opts,
   .ss-list.ss-open .ss-opts {
     overflow-y: auto !important;
     flex: 1 1 auto !important;
