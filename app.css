@@ -13880,8 +13880,6 @@ input, textarea, select { -webkit-user-select: text; user-select: text; }
 /* ── 4. Tablet portrait (641–1024px): comfortable two-column grids ────── */
 @media (min-width: 641px) and (max-width: 1024px) {
   #content { padding-left: 24px !important; padding-right: 24px !important; }
-  .mob-nav { left: 50% !important; right: auto !important; width: min(520px, calc(100% - 48px)); transform: translateX(-50%); }
-  .mob-nav.nav-hidden { transform: translate(-50%, calc(100% + 28px)) !important; }
   .modal-box, .modal, .overlay-box { max-width: 560px !important; border-radius: 28px !important; margin-bottom: 24px !important; }
 }
 
@@ -14004,6 +14002,84 @@ input, textarea, select { -webkit-user-select: text; user-select: text; }
   /* Header bar — clean, no tint */
   .topbar { background: rgba(255,255,255,.92) !important; }
   body.dark .topbar { background: rgba(11,11,12,.9) !important; }
+}
+
+
+/* ════════════════════════════════════════════════════════════════════════════
+   v3 — FIXES + REDESIGN
+   1) Drawer: old rule `.sb{display:none!important}` (≤768px) hid the menu, only the blur showed.
+   2) Tab bar: old `.mob-nav{display:flex}` shrank the inner row to content → off-centre.
+   3) Hero: floating card (consistent 12px inset everywhere), editorial serif numerals.
+════════════════════════════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+
+  /* ── Drawer (always above overlay; display forced back on) ── */
+  #sApp .sb {
+    display: flex !important; flex-direction: column;
+    position: fixed !important; top: 0 !important; left: 0 !important; bottom: 0 !important;
+    height: 100% !important; width: min(84vw, 320px) !important; min-width: 0 !important; max-width: 320px !important;
+    z-index: 2000 !important; background: var(--sb) !important;
+    border: 0 !important; border-radius: 0 30px 30px 0 !important; box-shadow: none !important;
+    transform: translateX(-105%) !important; visibility: hidden;
+    transition: transform .4s var(--ease), visibility 0s linear .4s, box-shadow .4s !important;
+    overflow-y: auto !important; overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
+  }
+  #sApp .sb.mob-open {
+    transform: translateX(0) !important; visibility: visible;
+    transition: transform .4s var(--ease), visibility 0s, box-shadow .4s !important;
+    box-shadow: 24px 0 64px rgba(17,17,17,.32) !important;
+  }
+  #mobOv, #sbOverlay, .mob-ov, .sb-overlay { z-index: 1900 !important; background: rgba(17,17,17,.5) !important; -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); }
+  #mobOv.on, #sbOverlay.on, .mob-ov.on, .sb-overlay.on { display: block !important; opacity: 1 !important; pointer-events: auto !important; }
+  .sb-hd { padding: calc(20px + var(--safe-t)) 16px 14px !important; border-bottom: 1px solid var(--bdr); }
+  .sb-prof { background: var(--sur2) !important; border: 1px solid var(--bdr); border-radius: 18px !important; padding: 12px !important; }
+  .sb-ava { background: linear-gradient(145deg,#2E2E2E,#111) !important; color: #F1BCC4 !important; }
+  .sb-name { font-weight: 700 !important; }
+  .sb-role { color: var(--accent-d) !important; font-weight: 600; }
+
+  /* ── Floating tab bar: truly centred, expanding active pill ── */
+  .mob-nav {
+    display: flex !important; justify-content: center;
+    left: 0 !important; right: 0 !important; margin: 0 auto !important;
+    width: calc(100% - 28px) !important; max-width: 430px; box-sizing: border-box;
+    transform: none; padding: 0 !important;
+  }
+  .mob-nav.nav-hidden { transform: translateY(calc(100% + 28px)) !important; }
+  .mob-nav-inner { flex: 1 1 auto !important; width: 100% !important; height: 64px !important; display: flex !important; align-items: stretch; justify-content: space-between; padding: 0 6px !important; gap: 0 !important; }
+  .mob-nav .mob-nav-item {
+    flex: 1 1 0 !important; min-width: 0; margin: 8px 2px !important; padding: 0 !important; min-height: 0 !important;
+    flex-direction: row !important; align-items: center; justify-content: center; gap: 0 !important;
+    border-radius: 24px; background: transparent; color: rgba(255,255,255,.62) !important;
+    transition: flex-grow .45s var(--ease), background .3s, color .25s !important;
+  }
+  .mob-nav .mob-nav-item > span:not(.mob-nav-pill) { display: none !important; }
+  .mob-nav .mob-nav-pill { width: auto !important; height: auto !important; background: transparent !important; transform: none !important; display: inline-flex; align-items: center; justify-content: center; }
+  .mob-nav .mob-nav-item i { font-size: 19px !important; color: inherit !important; transform: none !important; }
+  .mob-nav .mob-nav-item.active {
+    flex: 2.3 1 0 !important; gap: 8px !important; color: #fff !important;
+    background: linear-gradient(135deg, #CE939C 0%, #B76E79 100%) !important;
+    box-shadow: 0 8px 18px rgba(183,110,121,.45);
+  }
+  .mob-nav .mob-nav-item.active .mob-nav-pill { background: transparent !important; }
+  .mob-nav .mob-nav-item.active > span:not(.mob-nav-pill) { display: inline !important; font-size: 12.5px !important; font-weight: 700 !important; color: #fff !important; letter-spacing: .01em; white-space: nowrap; }
+  .mob-nav .mob-nav-item:active { transform: scale(.94); }
+
+  /* ── Hero: floating card, same inset as every other card ── */
+  #content > div[style*="margin:-14px -12px 0"] {
+    width: 100% !important; max-width: 100% !important; margin: 0 0 14px !important;
+    padding: 22px 20px !important; border-radius: 28px !important;
+    background:
+      radial-gradient(80% 90% at 100% 0%, rgba(206,147,156,.62) 0%, rgba(206,147,156,0) 60%),
+      radial-gradient(60% 60% at 0% 100%, rgba(255,255,255,.08) 0%, rgba(255,255,255,0) 60%),
+      linear-gradient(160deg, #26191D 0%, #121012 55%, #060606 100%) !important;
+    box-shadow: 0 22px 44px rgba(17,17,17,.26), inset 0 0 0 1px rgba(255,255,255,.08) !important;
+  }
+  .att-punch-card { margin-top: 0 !important; }
+
+  /* ── Editorial numerals ── */
+  .kpi-val { font-family: var(--serif) !important; font-size: 42px !important; font-weight: 700 !important; font-feature-settings: "lnum" 1, "tnum" 1; letter-spacing: -.02em !important; line-height: .95 !important; }
+  #dashKrow, .krow { gap: 12px !important; }
+  #content .qa-tile { border-radius: 22px !important; }
 }
 
 /* ═══════════════ END JOOLRY NATIVE APP LAYER ═══════════════ */
