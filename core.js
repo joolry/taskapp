@@ -632,6 +632,7 @@
       var _ssActiveWrap = null; // the ss-wrap that owns the open list
       var _ssOriginParent = null; // original parent to return list to on close
       var _ssOriginNext = null; // original next-sibling for correct DOM position
+      var _ssTouchOpenAt = 0; // ignore synthetic click that follows touchend open
 
       function _ssGetTheme() {
         var cs = getComputedStyle(document.documentElement);
@@ -646,6 +647,7 @@
       }
 
       function _ssPosition(list, wrap) {
+        if (!list || !wrap) return;
         var rect = wrap.getBoundingClientRect();
         var wW = window.innerWidth, wH = window.innerHeight;
         var dW = Math.min(Math.max(rect.width, 180), wW - 16);
@@ -677,7 +679,7 @@
           }
           if (_ssPortal.parentNode === document.body) {
             if (_ssOriginParent) {
-              _ssOriginParent.insertBefore(_ssPortal, _ssOriginNext);
+              try { _ssOriginParent.insertBefore(_ssPortal, _ssOriginNext); } catch (e) {}
             }
           }
           _ssPortal = null;
@@ -707,23 +709,12 @@
       }
 
 
-      // Mobile: open searchable select on touchend (readonly input click is flaky)
-      document.addEventListener('touchend', function (e) {
-        var inp = e.target.closest && e.target.closest('.ss-inp');
-        if (!inp) return;
-        var w = inp.closest('.ss-wrap');
-        if (!w) return;
-        var id = w.getAttribute('data-id');
-        var list = id && document.getElementById('ssl_' + id);
-        if (!list) return;
-        // If already open via portal, ignore (click will close)
-        if (_ssPortal === list) return;
-        // Prevent ghost click from toggling closed immediately
-        e.preventDefault();
+      // Shared open helper used by touch + click
+      function _ssOpenPortal(inp, w, list) {
         closePortal();
         _ssOriginParent = list.parentNode;
         _ssOriginNext = list.nextSibling;
-        var tTheme = _ssGetTheme();
+        var t = _ssGetTheme();
         var r0 = w.getBoundingClientRect();
         var wW = window.innerWidth, wH = window.innerHeight;
         var minW = Math.max(r0.width, 160);
@@ -734,9 +725,9 @@
         list.style.cssText =
           'position:fixed!important;left:' + lft + 'px;right:auto;' +
           (above ? 'bottom:' + (wH - r0.top + 4) + 'px;top:auto;' : 'top:' + (r0.bottom + 4) + 'px;bottom:auto;') +
-          'width:' + dW + 'px;min-width:0;z-index:2147483647;background:' + tTheme.bg +
-          ';border:1.5px solid ' + tTheme.bdr +
-          ';border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,.18);display:flex!important;flex-direction:column;max-height:min(280px,45vh);overflow:hidden;';
+          'width:' + dW + 'px;min-width:0;z-index:2147483647;background:' + t.bg +
+          ';border:1.5px solid ' + t.bdr +
+          ';border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,.18);display:flex!important;flex-direction:column;max-height:min(280px,45vh);overflow:hidden;visibility:visible!important;opacity:1!important;pointer-events:auto!important;';
         document.body.appendChild(list);
         list.classList.add('ss-open');
         inp.classList.add('ss-open');
@@ -750,59 +741,45 @@
         list._ssScrollFn = fn;
         window.addEventListener('scroll', fn, true);
         window.addEventListener('resize', fn, true);
+      }
+
+      // Mobile: open searchable select on touchend (readonly input click is flaky)
+      document.addEventListener('touchend', function (e) {
+        var inp = e.target.closest && e.target.closest('.ss-inp');
+        if (!inp) return;
+        var w = inp.closest('.ss-wrap');
+        if (!w) return;
+        var id = w.getAttribute('data-id');
+        var list = id && document.getElementById('ssl_' + id);
+        if (!list) return;
+        // Toggle: if already open, close
+        if (_ssPortal === list) {
+          e.preventDefault();
+          closePortal();
+          _ssTouchOpenAt = Date.now();
+          return;
+        }
+        // Prevent ghost click from toggling closed immediately
+        e.preventDefault();
+        _ssOpenPortal(inp, w, list);
+        _ssTouchOpenAt = Date.now();
       }, {passive: false});
       document.addEventListener('click', function (e) {
         var inp = e.target.closest('.ss-inp');
         if (inp) {
+          // Ignore synthetic click right after touchend open (mobile double-fire)
+          if (Date.now() - _ssTouchOpenAt < 450) {
+            e.preventDefault();
+            e.stopPropagation();
+            return;
+          }
           var w = inp.closest('.ss-wrap'), id = w && w.getAttribute('data-id');
           var list = id && document.getElementById('ssl_' + id);
           if (!list) return;
           var wasOpen = (_ssPortal === list);
           closePortal();
           if (!wasOpen) {
-            // Portal: calculate position first, then append — no layout flash
-            _ssOriginParent = list.parentNode;
-            _ssOriginNext = list.nextSibling;
-            var t = _ssGetTheme();
-            var r0 = w.getBoundingClientRect();
-            var wW = window.innerWidth, wH = window.innerHeight;
-            // Width: match the select width minimum, cap at viewport
-            // Don't use min 200px as override — use actual select width or content
-            var minW = Math.max(r0.width, 160);
-            var dW = Math.min(minW, wW - 16);
-            var lft = Math.max(4, Math.min(r0.left, wW - dW - 4));
-            var spB = wH - r0.bottom - 6, spA = r0.top - 6;
-            var above = spB < 200 && spA > spB;
-            list.style.cssText =
-              'position:fixed!important;' +
-              'left:' + lft + 'px;' +
-              'right:auto;' +
-              (above
-                ? 'bottom:' + (wH - r0.top + 4) + 'px;top:auto;'
-                : 'top:' + (r0.bottom + 4) + 'px;bottom:auto;') +
-              'width:' + dW + 'px;' +
-              'min-width:0;' +
-              'z-index:2147483647;' +
-              'background:' + t.bg + ';' +
-              'border:1.5px solid ' + t.bdr + ';' +
-              'border-radius:12px;' +
-              'box-shadow:0 10px 40px rgba(0,0,0,.18);' +
-              'display:flex!important;flex-direction:column;' +
-              'max-height:300px;overflow:hidden';
-            document.body.appendChild(list);
-            list.classList.add('ss-open');
-            inp.classList.add('ss-open');
-            _ssPortal = list;
-            _ssActiveWrap = w;
-            var arr = w.querySelector('.ss-arr');
-            if (arr) arr.style.transform = 'translateY(-50%) rotate(180deg)';
-            var si = list.querySelector('.ss-si');
-            if (si) {si.value = ''; filter(list, ''); setTimeout(function () {si.focus();}, 60);}
-            // Reposition on scroll/resize
-            var fn = function () {_ssPosition(list, w);};
-            list._ssScrollFn = fn;
-            window.addEventListener('scroll', fn, true);
-            window.addEventListener('resize', fn, true);
+            _ssOpenPortal(inp, w, list);
           }
           e.stopPropagation(); return;
         }
@@ -1061,20 +1038,31 @@
     var _TOKEN = '';
 
     var _gasActive = 0; // count of concurrent GAS calls in flight
+    var _lbChipTimer = null; // delay chip so brief calls don't flash "Processing"
 
     function _lbShow() {
       _gasActive++;
+      // Thin top bar: immediate subtle feedback
       var b = document.getElementById('fkLb');
       if (b) b.style.opacity = '1';
-      var c = document.getElementById('fkBusyChip');
-      if (c) {
-        c.style.opacity = '1';
-        c.style.transform = 'translateX(-50%) translateY(0)';
+      // Chip only after 450ms — avoids bar-bar flash on fast/cached reads
+      if (_gasActive === 1) {
+        if (_lbChipTimer) clearTimeout(_lbChipTimer);
+        _lbChipTimer = setTimeout(function () {
+          _lbChipTimer = null;
+          if (!_gasActive) return;
+          var c = document.getElementById('fkBusyChip');
+          if (c) {
+            c.style.opacity = '1';
+            c.style.transform = 'translateX(-50%) translateY(0)';
+          }
+        }, 450);
       }
     }
     function _lbHide() {
       _gasActive = Math.max(0, _gasActive - 1);
       if (!_gasActive) {
+        if (_lbChipTimer) { clearTimeout(_lbChipTimer); _lbChipTimer = null; }
         var b = document.getElementById('fkLb');
         if (b) b.style.opacity = '0';
         var c = document.getElementById('fkBusyChip');
@@ -11505,26 +11493,37 @@
         '<button class="btn btn-outline" onclick="_closeModal()"><i class="fas fa-times"></i> Cancel</button>' +
         (onConfirm ? '<button class="btn" id="mConfirmBtn">' + (confirmLabel || 'Confirm') + '</button>' : '');
 
-      // Mobile: full-width bottom sheet, no side cut-off
+      // Mobile: full-width bottom sheet, centered, no side cut-off
       var isMob = window.innerWidth <= 900;
       ov.style.display = 'flex';
       ov.style.alignItems = isMob ? 'flex-end' : 'center';
       ov.style.justifyContent = 'center';
       ov.style.padding = isMob ? '0' : '20px';
+      ov.style.left = '0';
+      ov.style.right = '0';
+      ov.style.width = '100%';
       modal.style.display = 'flex';
       if (isMob) {
         modal.style.width = '100%';
         modal.style.maxWidth = '100%';
+        modal.style.minWidth = '0';
         modal.style.margin = '0';
+        modal.style.left = '0';
+        modal.style.right = '0';
         modal.style.borderRadius = '20px 20px 0 0';
         modal.style.maxHeight = '88dvh';
         modal.style.boxSizing = 'border-box';
+        modal.style.overflowX = 'hidden';
       } else {
         modal.style.width = '';
         modal.style.maxWidth = '';
+        modal.style.minWidth = '';
         modal.style.margin = '';
+        modal.style.left = '';
+        modal.style.right = '';
         modal.style.borderRadius = '';
         modal.style.maxHeight = '';
+        modal.style.overflowX = '';
       }
       modal.classList.add('open');
       ov.classList.add('on');
@@ -11543,6 +11542,15 @@
     function _closeModal() {
       var ov = document.getElementById('mOv');
       var modal = document.getElementById('modal');
+      // Close any open dropdown portal first
+      try {
+        var openList = document.querySelector('body > .ss-list.ss-open');
+        if (openList) {
+          openList.classList.remove('ss-open');
+          openList.style.cssText = '';
+          if (openList.parentNode === document.body) openList.remove();
+        }
+      } catch (e) {}
       if (ov) {
         ov.style.display = 'none';
         ov.classList.remove('on');
@@ -15306,15 +15314,23 @@ function _loadEmpDetail(empId) {
       // Page transition is handled by content rendering itself
     }
 
-    // ── Pull-to-refresh ──────────────────────────────────────────────────
+    // ── Pull-to-refresh (thin top progress bar only) ─────────────────────
     (function () {
       var startY = 0, pulling = false, armed = false, busy = false, ptr = null;
+      function ptrShow() {
+        ptr = ptr || document.getElementById('fkPtr');
+        if (ptr) { ptr.classList.add('show'); ptr.style.display = ''; }
+      }
+      function ptrHide() {
+        ptr = ptr || document.getElementById('fkPtr');
+        if (ptr) { ptr.classList.remove('show'); ptr.style.display = ''; }
+      }
       document.addEventListener('touchstart', function (e) {
         if (busy) return;
         ptr = document.getElementById('fkPtr');
         var ct = document.getElementById('content');
         if (!ct || ct.scrollTop > 2) { pulling = false; armed = false; return; }
-        if (e.target.closest && e.target.closest('input, select, textarea, .ss-wrap, .ss-list, .modal-box, .modal-ov')) {
+        if (e.target.closest && e.target.closest('input, select, textarea, .ss-wrap, .ss-list, .modal-box, .modal-ov, .ss-inp')) {
           pulling = false; return;
         }
         startY = e.touches[0].clientY;
@@ -15322,35 +15338,30 @@ function _loadEmpDetail(empId) {
         armed = false;
       }, {passive: true});
       document.addEventListener('touchmove', function (e) {
-        if (!pulling || !ptr || busy) return;
+        if (!pulling || busy) return;
         var dy = e.touches[0].clientY - startY;
         if (dy > 70) {
           armed = true;
-          ptr.classList.add('show');
-          ptr.style.display = 'block';
+          ptrShow();
         } else if (dy < 40) {
           armed = false;
-          ptr.classList.remove('show');
-          ptr.style.display = 'none';
+          ptrHide();
         }
       }, {passive: true});
       document.addEventListener('touchend', function () {
         if (!pulling) return;
         pulling = false;
-        if (!ptr) return;
         if (armed && !busy) {
           busy = true;
           armed = false;
-          ptr.classList.add('show');
-          ptr.style.display = 'block';
+          ptrShow();
           try { _forceRefresh(); } catch (err) {}
           setTimeout(function () {
             busy = false;
-            if (ptr) { ptr.classList.remove('show'); ptr.style.display = 'none'; }
-          }, 1600);
+            ptrHide();
+          }, 1400);
         } else {
-          ptr.classList.remove('show');
-          ptr.style.display = 'none';
+          ptrHide();
         }
       }, {passive: true});
     })();
