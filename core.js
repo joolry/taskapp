@@ -164,7 +164,7 @@
       window._tsAllTasks = null;
       _D.lastFetch = null;
       _lcClear();
-      try { _toast('<i class="fas fa-rotate-right fa-spin"></i> Syncing latest…', 'info'); } catch (e) {}
+      try { /* quiet: top bar shows progress */ } catch (e) {}
       // 1) Ask server to rebuild SNAPSHOT from sheets (realtime)
       // 2) Then reload current view from fresh snap (instant after sync)
       _gasX('clientForceSync', [], 45000, function (d) {
@@ -706,6 +706,51 @@
         } else if (em) em.remove();
       }
 
+
+      // Mobile: open searchable select on touchend (readonly input click is flaky)
+      document.addEventListener('touchend', function (e) {
+        var inp = e.target.closest && e.target.closest('.ss-inp');
+        if (!inp) return;
+        var w = inp.closest('.ss-wrap');
+        if (!w) return;
+        var id = w.getAttribute('data-id');
+        var list = id && document.getElementById('ssl_' + id);
+        if (!list) return;
+        // If already open via portal, ignore (click will close)
+        if (_ssPortal === list) return;
+        // Prevent ghost click from toggling closed immediately
+        e.preventDefault();
+        closePortal();
+        _ssOriginParent = list.parentNode;
+        _ssOriginNext = list.nextSibling;
+        var tTheme = _ssGetTheme();
+        var r0 = w.getBoundingClientRect();
+        var wW = window.innerWidth, wH = window.innerHeight;
+        var minW = Math.max(r0.width, 160);
+        var dW = Math.min(minW, wW - 16);
+        var lft = Math.max(4, Math.min(r0.left, wW - dW - 4));
+        var spB = wH - r0.bottom - 6, spA = r0.top - 6;
+        var above = spB < 200 && spA > spB;
+        list.style.cssText =
+          'position:fixed!important;left:' + lft + 'px;right:auto;' +
+          (above ? 'bottom:' + (wH - r0.top + 4) + 'px;top:auto;' : 'top:' + (r0.bottom + 4) + 'px;bottom:auto;') +
+          'width:' + dW + 'px;min-width:0;z-index:2147483647;background:' + tTheme.bg +
+          ';border:1.5px solid ' + tTheme.bdr +
+          ';border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,.18);display:flex!important;flex-direction:column;max-height:min(280px,45vh);overflow:hidden;';
+        document.body.appendChild(list);
+        list.classList.add('ss-open');
+        inp.classList.add('ss-open');
+        _ssPortal = list;
+        _ssActiveWrap = w;
+        var arr = w.querySelector('.ss-arr');
+        if (arr) arr.style.transform = 'translateY(-50%) rotate(180deg)';
+        var si = list.querySelector('.ss-si');
+        if (si) { si.value = ''; filter(list, ''); setTimeout(function () { try { si.focus(); } catch (e2) {} }, 50); }
+        var fn = function () { _ssPosition(list, w); };
+        list._ssScrollFn = fn;
+        window.addEventListener('scroll', fn, true);
+        window.addEventListener('resize', fn, true);
+      }, {passive: false});
       document.addEventListener('click', function (e) {
         var inp = e.target.closest('.ss-inp');
         if (inp) {
@@ -11460,21 +11505,38 @@
         '<button class="btn btn-outline" onclick="_closeModal()"><i class="fas fa-times"></i> Cancel</button>' +
         (onConfirm ? '<button class="btn" id="mConfirmBtn">' + (confirmLabel || 'Confirm') + '</button>' : '');
 
-      // Show overlay + modal (use class-based show for CSS centering to work)
+      // Mobile: full-width bottom sheet, no side cut-off
+      var isMob = window.innerWidth <= 900;
       ov.style.display = 'flex';
-      ov.style.alignItems = 'center';
+      ov.style.alignItems = isMob ? 'flex-end' : 'center';
       ov.style.justifyContent = 'center';
-      ov.style.padding = '20px';
+      ov.style.padding = isMob ? '0' : '20px';
       modal.style.display = 'flex';
+      if (isMob) {
+        modal.style.width = '100%';
+        modal.style.maxWidth = '100%';
+        modal.style.margin = '0';
+        modal.style.borderRadius = '20px 20px 0 0';
+        modal.style.maxHeight = '88dvh';
+        modal.style.boxSizing = 'border-box';
+      } else {
+        modal.style.width = '';
+        modal.style.maxWidth = '';
+        modal.style.margin = '';
+        modal.style.borderRadius = '';
+        modal.style.maxHeight = '';
+      }
       modal.classList.add('open');
 
+      // Searchable selects inside modal body
       setTimeout(function () {
+        try { if (typeof _initSearchSelects === 'function' && bEl) _initSearchSelects(bEl); } catch (e) {}
         var cb = document.getElementById('mConfirmBtn');
         if (cb) {
-          if (onConfirm) cb.onclick = onConfirm; // ← closure se uid milega
-          cb.focus();
+          if (onConfirm) cb.onclick = onConfirm;
+          if (!isMob) cb.focus();
         }
-      }, 100);
+      }, 80);
     }
 
     function _closeModal() {
@@ -15239,28 +15301,51 @@ function _loadEmpDetail(empId) {
 
     // ── Pull-to-refresh ──────────────────────────────────────────────────
     (function () {
-      var startY = 0, pulling = false, ptr = null;
+      var startY = 0, pulling = false, armed = false, busy = false, ptr = null;
       document.addEventListener('touchstart', function (e) {
+        if (busy) return;
         ptr = document.getElementById('fkPtr');
         var ct = document.getElementById('content');
-        if (!ct || ct.scrollTop > 0) return;
+        if (!ct || ct.scrollTop > 2) { pulling = false; armed = false; return; }
+        if (e.target.closest && e.target.closest('input, select, textarea, .ss-wrap, .ss-list, .modal-box, .modal-ov')) {
+          pulling = false; return;
+        }
         startY = e.touches[0].clientY;
         pulling = true;
+        armed = false;
       }, {passive: true});
       document.addEventListener('touchmove', function (e) {
-        if (!pulling || !ptr) return;
+        if (!pulling || !ptr || busy) return;
         var dy = e.touches[0].clientY - startY;
-        if (dy > 60) {ptr.style.display = 'block';}
+        if (dy > 70) {
+          armed = true;
+          ptr.classList.add('show');
+          ptr.style.display = 'block';
+        } else if (dy < 40) {
+          armed = false;
+          ptr.classList.remove('show');
+          ptr.style.display = 'none';
+        }
       }, {passive: true});
       document.addEventListener('touchend', function () {
-        if (!pulling || !ptr) return;
+        if (!pulling) return;
         pulling = false;
-        if (ptr.style.display === 'block') {
+        if (!ptr) return;
+        if (armed && !busy) {
+          busy = true;
+          armed = false;
+          ptr.classList.add('show');
           ptr.style.display = 'block';
-          _forceRefresh();
-          setTimeout(function () {if (ptr) ptr.style.display = 'none';}, 1200);
+          try { _forceRefresh(); } catch (err) {}
+          setTimeout(function () {
+            busy = false;
+            if (ptr) { ptr.classList.remove('show'); ptr.style.display = 'none'; }
+          }, 1600);
+        } else {
+          ptr.classList.remove('show');
+          ptr.style.display = 'none';
         }
-      });
+      }, {passive: true});
     })();
 
     // ── Bottom nav: routing ──────────────────────────────────────────────
