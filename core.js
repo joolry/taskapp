@@ -650,18 +650,18 @@
         var wW = window.innerWidth, wH = window.innerHeight;
         var dW = Math.min(Math.max(rect.width, 180), wW - 16);
         var lft = Math.max(4, Math.min(rect.left, wW - dW - 4));
-        var spB = wH - rect.bottom - 6, spA = rect.top - 6;
+        var spB = wH - rect.bottom - 80, spA = rect.top - 8;
         var above = spB < 200 && spA > spB;
-        list.style.right = 'auto';
-        list.style.minWidth = '0';
-        list.style.left = lft + 'px';
-        list.style.width = dW + 'px';
+        list.style.setProperty('left', lft + 'px', 'important');
+        list.style.setProperty('right', 'auto', 'important');
+        list.style.setProperty('width', dW + 'px', 'important');
+        list.style.setProperty('min-width', '0', 'important');
         if (above) {
-          list.style.top = 'auto';
-          list.style.bottom = (wH - rect.top + 4) + 'px';
+          list.style.setProperty('top', 'auto', 'important');
+          list.style.setProperty('bottom', (wH - rect.top + 4) + 'px', 'important');
         } else {
-          list.style.bottom = 'auto';
-          list.style.top = (rect.bottom + 4) + 'px';
+          list.style.setProperty('bottom', 'auto', 'important');
+          list.style.setProperty('top', (rect.bottom + 4) + 'px', 'important');
         }
       }
 
@@ -707,7 +707,7 @@
       }
 
 
-      // Mobile: open searchable select on touchend (readonly input click is flaky)
+      // Mobile: open searchable select on touchend
       document.addEventListener('touchend', function (e) {
         var inp = e.target.closest && e.target.closest('.ss-inp');
         if (!inp) return;
@@ -716,41 +716,66 @@
         var id = w.getAttribute('data-id');
         var list = id && document.getElementById('ssl_' + id);
         if (!list) return;
-        // If already open via portal, ignore (click will close)
         if (_ssPortal === list) return;
-        // Prevent ghost click from toggling closed immediately
         e.preventDefault();
+        _ssOpenPortal(list, w);
+      }, {passive: false});
+
+      function _ssOpenPortal(list, wrap) {
+        if (!list || !wrap) return;
         closePortal();
         _ssOriginParent = list.parentNode;
         _ssOriginNext = list.nextSibling;
-        var tTheme = _ssGetTheme();
-        var r0 = w.getBoundingClientRect();
+        var t = _ssGetTheme();
+        var r0 = wrap.getBoundingClientRect();
         var wW = window.innerWidth, wH = window.innerHeight;
-        var minW = Math.max(r0.width, 160);
-        var dW = Math.min(minW, wW - 16);
+        var dW = Math.min(Math.max(r0.width, 160), wW - 16);
         var lft = Math.max(4, Math.min(r0.left, wW - dW - 4));
-        var spB = wH - r0.bottom - 6, spA = r0.top - 6;
+        var spB = wH - r0.bottom - 80; // leave room for bottom nav
+        var spA = r0.top - 8;
         var above = spB < 200 && spA > spB;
-        list.style.cssText =
-          'position:fixed!important;left:' + lft + 'px;right:auto;' +
-          (above ? 'bottom:' + (wH - r0.top + 4) + 'px;top:auto;' : 'top:' + (r0.bottom + 4) + 'px;bottom:auto;') +
-          'width:' + dW + 'px;min-width:0;z-index:2147483647;background:' + tTheme.bg +
-          ';border:1.5px solid ' + tTheme.bdr +
-          ';border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,.18);display:flex!important;flex-direction:column;max-height:min(280px,45vh);overflow:hidden;';
         document.body.appendChild(list);
         list.classList.add('ss-open');
-        inp.classList.add('ss-open');
+        // Clear ALL positioning first, then set with !important (beats site CSS)
+        list.style.cssText = '';
+        list.style.setProperty('position', 'fixed', 'important');
+        list.style.setProperty('left', lft + 'px', 'important');
+        list.style.setProperty('right', 'auto', 'important');
+        list.style.setProperty('width', dW + 'px', 'important');
+        list.style.setProperty('min-width', '0', 'important');
+        list.style.setProperty('z-index', '2147483647', 'important');
+        list.style.setProperty('background', t.bg, 'important');
+        list.style.setProperty('border', '1.5px solid ' + t.bdr, 'important');
+        list.style.setProperty('border-radius', '12px', 'important');
+        list.style.setProperty('box-shadow', '0 12px 40px rgba(0,0,0,.2)', 'important');
+        list.style.setProperty('display', 'block', 'important');
+        list.style.setProperty('max-height', 'min(280px, 50vh)', 'important');
+        list.style.setProperty('height', 'auto', 'important');
+        list.style.setProperty('overflow', 'auto', 'important');
+        list.style.setProperty('visibility', 'visible', 'important');
+        list.style.setProperty('opacity', '1', 'important');
+        list.style.setProperty('pointer-events', 'auto', 'important');
+        if (above) {
+          list.style.setProperty('top', 'auto', 'important');
+          list.style.setProperty('bottom', (wH - r0.top + 4) + 'px', 'important');
+        } else {
+          list.style.setProperty('bottom', 'auto', 'important');
+          list.style.setProperty('top', (r0.bottom + 4) + 'px', 'important');
+        }
         _ssPortal = list;
-        _ssActiveWrap = w;
-        var arr = w.querySelector('.ss-arr');
+        _ssActiveWrap = wrap;
+        var inp = wrap.querySelector('.ss-inp');
+        if (inp) inp.classList.add('ss-open');
+        var arr = wrap.querySelector('.ss-arr');
         if (arr) arr.style.transform = 'translateY(-50%) rotate(180deg)';
         var si = list.querySelector('.ss-si');
-        if (si) { si.value = ''; filter(list, ''); setTimeout(function () { try { si.focus(); } catch (e2) {} }, 50); }
-        var fn = function () { _ssPosition(list, w); };
+        if (si) { si.value = ''; filter(list, ''); setTimeout(function () { try { si.focus(); } catch (e) {} }, 40); }
+        var fn = function () { _ssPosition(list, wrap); };
         list._ssScrollFn = fn;
         window.addEventListener('scroll', fn, true);
         window.addEventListener('resize', fn, true);
-      }, {passive: false});
+      }
+
       document.addEventListener('click', function (e) {
         var inp = e.target.closest('.ss-inp');
         if (inp) {
@@ -760,49 +785,7 @@
           var wasOpen = (_ssPortal === list);
           closePortal();
           if (!wasOpen) {
-            // Portal: calculate position first, then append — no layout flash
-            _ssOriginParent = list.parentNode;
-            _ssOriginNext = list.nextSibling;
-            var t = _ssGetTheme();
-            var r0 = w.getBoundingClientRect();
-            var wW = window.innerWidth, wH = window.innerHeight;
-            // Width: match the select width minimum, cap at viewport
-            // Don't use min 200px as override — use actual select width or content
-            var minW = Math.max(r0.width, 160);
-            var dW = Math.min(minW, wW - 16);
-            var lft = Math.max(4, Math.min(r0.left, wW - dW - 4));
-            var spB = wH - r0.bottom - 6, spA = r0.top - 6;
-            var above = spB < 200 && spA > spB;
-            list.style.cssText =
-              'position:fixed!important;' +
-              'left:' + lft + 'px;' +
-              'right:auto;' +
-              (above
-                ? 'bottom:' + (wH - r0.top + 4) + 'px;top:auto;'
-                : 'top:' + (r0.bottom + 4) + 'px;bottom:auto;') +
-              'width:' + dW + 'px;' +
-              'min-width:0;' +
-              'z-index:2147483647;' +
-              'background:' + t.bg + ';' +
-              'border:1.5px solid ' + t.bdr + ';' +
-              'border-radius:12px;' +
-              'box-shadow:0 10px 40px rgba(0,0,0,.18);' +
-              'display:flex!important;flex-direction:column;' +
-              'max-height:300px;overflow:hidden';
-            document.body.appendChild(list);
-            list.classList.add('ss-open');
-            inp.classList.add('ss-open');
-            _ssPortal = list;
-            _ssActiveWrap = w;
-            var arr = w.querySelector('.ss-arr');
-            if (arr) arr.style.transform = 'translateY(-50%) rotate(180deg)';
-            var si = list.querySelector('.ss-si');
-            if (si) {si.value = ''; filter(list, ''); setTimeout(function () {si.focus();}, 60);}
-            // Reposition on scroll/resize
-            var fn = function () {_ssPosition(list, w);};
-            list._ssScrollFn = fn;
-            window.addEventListener('scroll', fn, true);
-            window.addEventListener('resize', fn, true);
+            _ssOpenPortal(list, w);
           }
           e.stopPropagation(); return;
         }
