@@ -900,7 +900,16 @@
        SIDEBAR MOBILE
     ══════════════════════════════════════════════════════════ */
     function _sbOverlays(on) {
-      ['mobOv', 'sbOverlay'].forEach(function (id) {
+      // Mobile: only #mobOv (inside #sApp). #sbOverlay is outside #sApp and
+      // paints OVER the drawer (grey wash) — never enable it on small screens.
+      var ids = (window.innerWidth <= 900) ? ['mobOv'] : ['mobOv', 'sbOverlay'];
+      // Always force-hide outer overlay on mobile
+      var outer = document.getElementById('sbOverlay');
+      if (outer && window.innerWidth <= 900) {
+        outer.classList.remove('on');
+        outer.style.display = 'none';
+      }
+      ids.forEach(function (id) {
         var el = document.getElementById(id);
         if (!el) return;
         if (on) el.classList.add('on');
@@ -6989,7 +6998,7 @@
     /* ══════════════════════════════════════════════════════════
        RESPONSIVE UTILITY — Detect breakpoints
     ══════════════════════════════════════════════════════════ */
-    function _isMobile() {return window.innerWidth <= 640;}
+    function _isMobile() {return window.innerWidth <= 900;}
     function _isTablet() {return window.innerWidth > 640 && window.innerWidth <= 960;}
     function _isDesktop() {return window.innerWidth > 960;}
 
@@ -11378,7 +11387,7 @@
       });
 
       // 6. On mobile — fix sort bars + filter grids
-      if (window.innerWidth <= 640) {
+      if (window.innerWidth <= 900) {
         content.querySelectorAll('[id$="SortBar"], .sort-bar').forEach(function (bar) {
           bar.style.flexWrap = 'nowrap';
           bar.style.overflowX = 'auto';
@@ -13778,7 +13787,7 @@
       setTimeout(function () {
         var m = document.getElementById('modal');
         if (m) {
-          var isMobile = window.innerWidth <= 640;
+          var isMobile = window.innerWidth <= 900;
           m.style.maxWidth = isMobile ? '100%' : '720px';
           m.style.width = isMobile ? '100vw' : '96vw';
           m.style.margin = isMobile ? '0' : '';
@@ -15188,7 +15197,7 @@ function _loadEmpDetail(empId) {
     // ══════════════════════════════════════════════════════════════════════
     // MOBILE JS — Auto-hide nav, page anim, swipe, more tray
     // ══════════════════════════════════════════════════════════════════════
-    var _isMobile = function () {return window.innerWidth <= 640;};
+    var _isMobile = function () {return window.innerWidth <= 900;};
 
     // ── Auto-hide bottom nav on scroll down, show on scroll up ──────────
     (function () {
