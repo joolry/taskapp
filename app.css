@@ -15420,3 +15420,92 @@ input, textarea, select { -webkit-user-select: text; user-select: text; }
   }
 }
 
+
+/* ════════════════════════════════════════════════════════════════════════════
+   CHECKLIST: Add New Task dropdowns + Team sort (v10)
+════════════════════════════════════════════════════════════════════════════ */
+@media (max-width: 900px) {
+  /* Parents must NOT clip dropdown lists */
+  #csetupPane,
+  #csetupPane .csetup-grid,
+  #csetupPane .card,
+  #csetupPane .card-nohover,
+  #csetupPane .form-g,
+  #csetupPane .fgrp {
+    overflow: visible !important;
+  }
+  #csetupPane .csetup-grid > div:last-child {
+    overflow: visible !important;
+  }
+
+  /* Searchable select open above everything */
+  #csetupPane .ss-wrap {
+    position: relative !important;
+    z-index: 1 !important;
+    width: 100% !important;
+    overflow: visible !important;
+  }
+  #csetupPane .ss-wrap:focus-within,
+  #csetupPane .ss-wrap:has(.ss-list.ss-open),
+  #csetupPane .ss-wrap:has(.ss-inp.ss-open) {
+    z-index: 6000 !important;
+  }
+  #csetupPane .ss-list,
+  #csetupPane .ss-list.ss-open {
+    position: absolute !important;
+    left: 0 !important;
+    right: 0 !important;
+    top: calc(100% + 4px) !important;
+    z-index: 7000 !important;
+    max-height: min(240px, 50vh) !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    background: var(--sur, #fff) !important;
+    border: 1px solid var(--bdr) !important;
+    border-radius: 12px !important;
+    box-shadow: 0 12px 28px rgba(0,0,0,.18) !important;
+    display: block !important;
+  }
+  /* when closed, hide */
+  #csetupPane .ss-list:not(.ss-open) {
+    display: none !important;
+  }
+
+  /* Native select fallback always usable */
+  #csetupPane select {
+    width: 100% !important;
+    min-height: 44px !important;
+    font-size: 16px !important;
+  }
+  #csetupPane .ss-wrap + select[data-ss="1"] {
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+  }
+
+  #csetupPane .fgrp {
+    width: 100% !important;
+    margin-bottom: 10px !important;
+  }
+  #csetupPane input,
+  #csetupPane select,
+  #csetupPane textarea {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  /* Mark Team Checklist sort chips — tappable, wrap */
+  #cmteamPane .ctsb,
+  #cmteamRoot .ctsb {
+    min-height: 36px !important;
+    padding: 6px 12px !important;
+    pointer-events: auto !important;
+    touch-action: manipulation !important;
+  }
+  #cmteamPane [style*="display:flex"][style*="gap"] {
+    flex-wrap: wrap !important;
+  }
+}
