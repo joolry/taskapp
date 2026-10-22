@@ -1532,6 +1532,9 @@
       if (_isManager()) {
         var mgrNav = document.getElementById('mgrNav');
         if (mgrNav) mgrNav.style.display = '';
+        // Show global Clear Cache / Sync button in topbar
+        var tbCache = document.getElementById('tbCacheBtn');
+        if (tbCache) tbCache.style.display = '';
       }
       if (_dark) {
         var darkIco = document.getElementById('darkIco');
