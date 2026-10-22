@@ -289,6 +289,12 @@
           <button class="ico-btn" onclick="_refresh()" title="Refresh page">
             <i class="fas fa-rotate-right"></i>
           </button>
+          <!-- Manager: clear GAS cache + force Firebase snapshot -->
+          <button class="ico-btn" id="tbCacheBtn" onclick="_forcePortalCacheClear()"
+            title="Clear server cache & push latest sheet data to Firebase"
+            style="display:none">
+            <i class="fas fa-cloud-arrow-down" id="tbCacheIco"></i>
+          </button>
         </div>
       </header>
 
