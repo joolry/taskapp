@@ -5350,8 +5350,8 @@
         '<div id="tamBulkBar" style="display:none;align-items:center;gap:8px;margin-bottom:12px;padding:10px 14px;background:var(--Pl);border-radius:10px;border:1px solid var(--bdr2)">' +
         '<i class="fas fa-bolt" style="color:var(--P)"></i>' +
         '<span id="tamBulkLbl" style="font-size:13px;font-weight:700;color:var(--P);flex:1"></span>' +
-        '<input type="time" id="tamBulkIn"  value="' + curTime + '" style="padding:5px 8px;border-radius:7px;border:1.5px solid var(--bdr2);background:var(--bg);font-size:12px;color:var(--tx)">' +
-        '<input type="time" id="tamBulkOut" placeholder="Out (opt)" style="padding:5px 8px;border-radius:7px;border:1.5px solid var(--bdr2);background:var(--bg);font-size:12px;color:var(--tx)">' +
+'<input type="time" id="tamBulkIn"  value="' + (_teamAttDate === _today() ? _nowTime() : '') + '" style="padding:5px 8px;border-radius:7px;border:1.5px solid var(--bdr2);background:var(--bg);font-size:12px;color:var(--tx)">' +
+        '<input type="time" id="tamBulkOut" value="" placeholder="Out (opt)" style="padding:5px 8px;border-radius:7px;border:1.5px solid var(--bdr2);background:var(--bg);font-size:12px;color:var(--tx)">' +
         '<button onclick="_tamMarkAll()" style="padding:6px 14px;border-radius:8px;background:var(--P);color:#fff;font-size:12px;font-weight:800;border:none;cursor:pointer;white-space:nowrap"><i class="fas fa-check-double"></i> Mark All Present</button>' +
         '</div>' +
 
@@ -5453,7 +5453,15 @@
         return;
       }
 
-      var curTime = _nowTime();
+      // var curTime = _nowTime();
+
+              // Only auto-fill current clock time when marking TODAY.
+      // Past/future dates: leave OUT blank so manager types real time (no 02:58 junk).
+      var isToday = (_teamAttDate === _today());
+      var defaultIn = isToday ? _nowTime() : '';
+      var defaultOut = isToday ? _nowTime() : '';  // past date → empty OUT
+
+        
 
       // Group by dept
       var byDept = {}, deptOrder = [];
@@ -5510,7 +5518,7 @@
               ? '<span style="padding:4px 10px;border-radius:20px;font-size:11px;font-weight:800;background:#fef3c7;color:#d97706">OUT pending</span>' +
               (r.check_in ? '<span style="font-size:12px;font-weight:700;color:var(--G)"><i class="fas fa-arrow-right-to-bracket"></i> ' + _esc(r.check_in) + '</span>' : '') +
               '<input type="hidden" id="ti_' + r.emp_id + '" value="' + _esc(r.check_in || '') + '">' +
-              '<input type="time" id="to_' + r.emp_id + '" value="' + curTime + '" class="tam-time" style="padding:5px 8px;border-radius:8px;border:1.5px solid var(--bdr);background:var(--bg);font-size:12px;color:var(--tx);min-width:100px">' +
+              '<input type="time" id="to_' + r.emp_id + '" value="' + defaultOut + '" class="tam-time" style="padding:5px 8px;border-radius:8px;border:1.5px solid var(--bdr);background:var(--bg);font-size:12px;color:var(--tx);min-width:100px" placeholder="HH:mm">' + style="padding:5px 8px;border-radius:8px;border:1.5px solid var(--bdr);background:var(--bg);font-size:12px;color:var(--tx);min-width:100px">' +
               '<select id="st_' + r.emp_id + '" class="tam-sel" style="padding:5px 8px;border-radius:8px;border:1.5px solid var(--bdr);background:var(--bg);font-size:12px;color:var(--tx)">' +
               '<option value="P"' + (r.status === 'P' || r.status === 'Present' ? ' selected' : '') + '>Present</option>' +
               '<option value="HD"' + (r.status === 'HD' || r.status === 'Half Day' ? ' selected' : '') + '>Half Day</option>' +
@@ -5519,8 +5527,8 @@
               '<option value="PTO"' + (r.status === 'PTO' ? ' selected' : '') + '>PTO</option>' +
               '</select>' +
               '<button id="mb_' + r.emp_id + '" class="tam-btn" onclick="_tamMark1(\'' + _esc(r.emp_id) + '\',\'' + _esc(r.name) + '\',\'' + _esc(d) + '\')" style="padding:6px 14px;border-radius:8px;background:#d97706;color:#fff;font-size:12px;font-weight:800;border:none;cursor:pointer;white-space:nowrap"><i class="fas fa-sign-out-alt"></i> Mark OUT</button>'
-              : '<input type="time" id="ti_' + r.emp_id + '" value="' + curTime + '" class="tam-time" style="padding:5px 8px;border-radius:8px;border:1.5px solid var(--bdr);background:var(--bg);font-size:12px;color:var(--tx);min-width:100px" title="Check-in">' +
-              '<input type="time" id="to_' + r.emp_id + '" class="tam-time" style="padding:5px 8px;border-radius:8px;border:1.5px solid var(--bdr);background:var(--bg);font-size:12px;color:var(--tx);min-width:100px" title="Check-out">' +
+              : '<input type="time" id="ti_' + r.emp_id + '" value="' + defaultIn + '" class="tam-time" style="padding:5px 8px;border-radius:8px;border:1.5px solid var(--bdr);background:var(--bg);font-size:12px;color:var(--tx);min-width:100px" title="Check-in">' + class="tam-time" style="padding:5px 8px;border-radius:8px;border:1.5px solid var(--bdr);background:var(--bg);font-size:12px;color:var(--tx);min-width:100px" title="Check-in">' +
+              '<input type="time" id="to_' + r.emp_id + '" value="" class="tam-time" style="padding:5px 8px;border-radius:8px;border:1.5px solid var(--bdr);background:var(--bg);font-size:12px;color:var(--tx);min-width:100px" title="Check-out (optional)">' + style="padding:5px 8px;border-radius:8px;border:1.5px solid var(--bdr);background:var(--bg);font-size:12px;color:var(--tx);min-width:100px" title="Check-out">' +
               '<select id="st_' + r.emp_id + '" class="tam-sel" style="padding:5px 8px;border-radius:8px;border:1.5px solid var(--bdr);background:var(--bg);font-size:12px;color:var(--tx)">' +
               '<option value="P">Present</option><option value="HD">Half Day</option><option value="A">Absent</option><option value="WO">Week Off</option><option value="PTO">PTO</option>' +
               '</select>' +
@@ -5602,6 +5610,20 @@
       var inT = (document.getElementById('ti_' + empId) || {}).value || '';
       var outT = (document.getElementById('to_' + empId) || {}).value || '';
       var st = (document.getElementById('st_' + empId) || {}).value || 'P';
+      if (inT && outT) {
+        var a = inT.split(':');
+        var b = outT.split(':');
+        var inMins = parseInt(a[0], 10) * 60 + parseInt(a[1], 10);
+        var outMins = parseInt(b[0], 10) * 60 + parseInt(b[1], 10);
+        if (!isNaN(inMins) && !isNaN(outMins) && outMins <= inMins) {
+          _toast('OUT time IN se baad hona chahiye (' + inT + '). OUT theek karo.', 'warn');
+          if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-sign-out-alt"></i> Mark OUT';
+          }
+          return;
+        }
+      }
       _toast('Marking ' + empName + '…', 'info');
       _gas('markStaffAttendance', [[{
         emp_id: empId, emp_name: empName, dept: dept,
