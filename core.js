@@ -118,35 +118,84 @@
       try {localStorage.removeItem(_LC_KEY);} catch (e) { }
     }
 
-    var _refreshTimer = null;   // background auto-refresh interval handle
-    var _AUTO_REFRESH_MS = 90000; // 90s — balance between freshness and GAS quota
+    var _refreshTimer = null;
+    var _AUTO_REFRESH_MS = 8000; // version poll every 8s
+    var _liveVer = null;         // last known server cache version
+    var _liveBusy = false;       // prevent overlapping soft reloads
 
-    // Background refresh — fetches only the lightweight dashboard data so
-    // changes in Google Sheets (task updates, delegation status, announcements)
-    // appear automatically without the user having to manually reload.
     function _startAutoRefresh() {
       _stopAutoRefresh();
+      // Seed version once, then poll
+      _pollLiveVer(true);
       _refreshTimer = setInterval(function () {
-        if (document.hidden) return; // skip when tab is in background
-        _gas('getDashboardStatsFresh', [], function (d) {
-          if (!d) {_hideSplash(); _loadV('dash'); return;}
-          if (d.dashStats) _D.dashStats = d.dashStats;
-          if (d.todayAtt) _D.todayAtt = d.todayAtt;
-          if (d.announcements) _D.announcements = d.announcements;
-          if (d.myDelegations) _D.myDelegations = d.myDelegations;
-          _D.lastFetch = Date.now(); _lcSave();
-          // If currently on the dashboard, silently re-render the KPI strip
-          var cur = window._curView || '';
-          if (cur === 'dash') {
-            var kpiEl = document.getElementById('dashKpi');
-            if (kpiEl && d.dashStats) _renderDashKpi(d.dashStats);
-          }
-        }, function () { }); // silent fail — will retry next interval
+        if (document.hidden) return;
+        _pollLiveVer(false);
       }, _AUTO_REFRESH_MS);
     }
 
     function _stopAutoRefresh() {
-      if (_refreshTimer) {clearInterval(_refreshTimer); _refreshTimer = null;}
+      if (_refreshTimer) { clearInterval(_refreshTimer); _refreshTimer = null; }
+    }
+
+    /** Lightweight GET /api/ver — no GAS, no auth burden */
+    function _pollLiveVer(isSeed) {
+      fetch('/api/ver', { method: 'GET', cache: 'no-store' })
+        .then(function (r) { return r.json(); })
+        .then(function (j) {
+          if (!j || j.on === false) return;
+          var v = j.ver;
+          if (v == null) return;
+          if (isSeed || _liveVer === null) {
+            _liveVer = v;
+            return;
+          }
+          if (v !== _liveVer) {
+            _liveVer = v;
+            _onLiveDataChange();
+          }
+        })
+        .catch(function () { /* silent */ });
+    }
+
+    /** Server data changed (other user / sheet / own write sync) → refresh open view */
+    function _onLiveDataChange() {
+      if (_liveBusy) return;
+      _liveBusy = true;
+      try {
+        if (typeof _rcClear === 'function') _rcClear(false);
+        delete _D.dashStats; delete _D.todayAtt; delete _D.todayTasks;
+        delete _D.announcements; delete _D.myDelegations; delete _D.myAtt;
+        delete _D.myAttendance; delete _D.lastFetch;
+        delete _D.weekTasks; delete _D._ckWeekKey;
+        delete _D.teamChecklist; delete _D._ckTeamKey;
+        delete _D.histLogs; delete _D._ckHistKey;
+        delete _D._ckTodayKey;
+        if (typeof _teamAttData !== 'undefined') _teamAttData = null;
+        window._tsAllTasks = null;
+      } catch (e) { }
+
+      var cur = window._curView || 'dash';
+      // Soft reload current view without full page spinner
+      try {
+        if (typeof _loadV === 'function') _loadV(cur);
+      } catch (e2) { }
+      // Keep announcement badge fresh even if not on ann page
+      try {
+        _gas('getAnnouncements', [], function (anns) {
+          var badge = document.getElementById('annBadge');
+          if (badge) {
+            if (anns && anns.length > 0) {
+              badge.textContent = anns.length;
+              badge.style.display = '';
+            } else {
+              badge.style.display = 'none';
+            }
+          }
+          _D.announcements = anns || [];
+        }, function () { });
+      } catch (e3) { }
+
+      setTimeout(function () { _liveBusy = false; }, 1200);
     }
 
     // Hard refresh — clears in-memory _D (forces fresh server fetch on next
@@ -1143,9 +1192,15 @@
         }
         if (data && data.success === false && data.error) {
           if (onErr) onErr({message: data.error}); else _toast('Error: ' + data.error, 'err');
-              } else {
+                      } else {
           if (_isW) _rcClear(false); else _rcPut(fn, args, data);
-          // Keep client session alive while user is active
+          // Own write → force clients to pick up new ver soon + soft self refresh
+          if (_isW) {
+            try {
+              _liveVer = null; // next poll treats any ver as change
+              setTimeout(function () { _pollLiveVer(false); }, 600);
+            } catch (eW) { }
+          }
           try { if (_U && _TOKEN) _saveSession(_U, _TOKEN); } catch (eTouch) { }
           if (onOk) onOk(data);
         }
