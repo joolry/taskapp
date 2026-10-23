@@ -10,7 +10,7 @@
     // Expiry enforced client-side; sign-out always clears it
     function _saveSession(user, token) {
       try {
-        var sessionHours = 12;
+           var sessionHours = 168; // 7 days default
         try {
           var sh = parseInt(localStorage.getItem('joolry_session_hours') || '');
           if (!isNaN(sh) && sh > 0) sessionHours = sh;
@@ -1143,8 +1143,10 @@
         }
         if (data && data.success === false && data.error) {
           if (onErr) onErr({message: data.error}); else _toast('Error: ' + data.error, 'err');
-        } else {
+              } else {
           if (_isW) _rcClear(false); else _rcPut(fn, args, data);
+          // Keep client session alive while user is active
+          try { if (_U && _TOKEN) _saveSession(_U, _TOKEN); } catch (eTouch) { }
           if (onOk) onOk(data);
         }
       }).catch(function () {
