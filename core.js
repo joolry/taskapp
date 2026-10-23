@@ -119,14 +119,15 @@
     }
 
     var _refreshTimer = null;
-    var _AUTO_REFRESH_MS = 8000; // version poll every 8s
-    var _liveVer = null;         // last known server cache version
-    var _liveBusy = false;       // prevent overlapping soft reloads
+    var _AUTO_REFRESH_MS = 30000; // backup poll 30s (listener primary)
+    var _liveVer = null;
+    var _liveBusy = false;
+    var _fsUnsub = null;          // Firestore onSnapshot unsubscribe
 
     function _startAutoRefresh() {
       _stopAutoRefresh();
-      // Seed version once, then poll
-      _pollLiveVer(true);
+      _startLiveListener();       // primary: instant
+      _pollLiveVer(true);         // seed + backup
       _refreshTimer = setInterval(function () {
         if (document.hidden) return;
         _pollLiveVer(false);
@@ -135,9 +136,54 @@
 
     function _stopAutoRefresh() {
       if (_refreshTimer) { clearInterval(_refreshTimer); _refreshTimer = null; }
+      if (_fsUnsub) {
+        try { _fsUnsub(); } catch (e) { }
+        _fsUnsub = null;
+      }
     }
 
-    /** Lightweight GET /api/ver — no GAS, no auth burden */
+    /** Primary: Firestore onSnapshot on _meta/state.ver */
+    function _startLiveListener() {
+      if (_fsUnsub) {
+        try { _fsUnsub(); } catch (e) { }
+        _fsUnsub = null;
+      }
+      try {
+        if (typeof firebase === 'undefined' || !window.FIREBASE_WEB || !window.FIREBASE_WEB.apiKey) {
+          return; // config missing → poll-only
+        }
+        if (window.FIREBASE_WEB.apiKey.indexOf('PASTE') === 0) return;
+
+        if (!firebase.apps || !firebase.apps.length) {
+          firebase.initializeApp(window.FIREBASE_WEB);
+        }
+        var db = firebase.firestore();
+        _fsUnsub = db.collection('_meta').doc('state').onSnapshot(
+          function (snap) {
+            if (!snap || !snap.exists) return;
+            var v = snap.data().ver;
+            if (v == null) return;
+            // Firestore may return number; normalize
+            v = typeof v === 'object' && v.toMillis ? v : Number(v);
+            if (_liveVer === null) {
+              _liveVer = v;
+              return;
+            }
+            if (v !== _liveVer) {
+              _liveVer = v;
+              _onLiveDataChange();
+            }
+          },
+          function (err) {
+            // Permission / network — keep poll backup
+            console.warn('[live] firestore listen failed', err && err.message);
+          }
+        );
+      } catch (e) {
+        console.warn('[live] init failed', e && e.message);
+      }
+    }
+
     function _pollLiveVer(isSeed) {
       fetch('/api/ver', { method: 'GET', cache: 'no-store' })
         .then(function (r) { return r.json(); })
@@ -154,10 +200,9 @@
             _onLiveDataChange();
           }
         })
-        .catch(function () { /* silent */ });
+        .catch(function () { });
     }
 
-    /** Server data changed (other user / sheet / own write sync) → refresh open view */
     function _onLiveDataChange() {
       if (_liveBusy) return;
       _liveBusy = true;
@@ -175,11 +220,10 @@
       } catch (e) { }
 
       var cur = window._curView || 'dash';
-      // Soft reload current view without full page spinner
       try {
         if (typeof _loadV === 'function') _loadV(cur);
       } catch (e2) { }
-      // Keep announcement badge fresh even if not on ann page
+
       try {
         _gas('getAnnouncements', [], function (anns) {
           var badge = document.getElementById('annBadge');
