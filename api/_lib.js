@@ -55,7 +55,7 @@ const SNAPSHOT_READS = new Set([
   'getAnnouncements', 'getAllAppConfigForFrontend', 'getHolidayList', 'getDoerList'
 ]);
 
-const SESSION_HOURS = 12;
+const SESSION_HOURS = 168; // 7 days — staff daily logout fix
 const b64 = (b) => Buffer.from(b).toString('base64url');
 
 function sign(payload) {
