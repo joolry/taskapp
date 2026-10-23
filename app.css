@@ -98,6 +98,47 @@
     }
 
 
+.l-title {
+  text-align: center;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.3px;
+  margin: 0 0 4px;
+  color: var(--tx);
+}
+.l-sub {
+  text-align: center;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--tx3);
+  margin: 0 0 28px;
+  letter-spacing: 0;
+}
+.l-footer {
+  text-align: center;
+  font-size: 11px;
+  color: var(--tx3);
+  margin-top: 20px;
+  opacity: 0.7;
+}
+.l-mob-brand {
+  text-align: center;
+  margin-bottom: 20px;
+}
+.l-mob-logo {
+  background: #fff;
+  border-radius: 16px;
+  padding: 10px 18px;
+  display: inline-flex;
+  box-shadow: 0 4px 20px rgba(0,0,0,.15);
+}
+.l-mob-logo img {
+  width: 90px;
+  height: 40px;
+  object-fit: contain;
+  display: block;
+}
+
     /* ══════════════════════════════════════════════════════════════════════
        PROMPT-STYLE COMPONENT LAYER (alignment + surfaces)
     ══════════════════════════════════════════════════════════════════════ */
