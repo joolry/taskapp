@@ -31,3 +31,18 @@ window.APP_CONFIG = {
 
 // Convenience shortcut — app.js uses window.GAS_URL
 window.GAS_URL = window.APP_CONFIG.GAS_URL;
+
+
+// Firebase client (Phase 2 live version) — Project settings → Web app se bharo
+window.FIREBASE_WEB = {
+  apiKey: 'PASTE_API_KEY',
+  authDomain: 'YOUR_PROJECT.firebaseapp.com',
+  projectId: 'YOUR_PROJECT_ID',
+  storageBucket: 'YOUR_PROJECT.appspot.com',
+  messagingSenderId: 'PASTE',
+  appId: 'PASTE'
+};
+
+
+
+
