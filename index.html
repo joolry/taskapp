@@ -60,30 +60,32 @@
 ═══════════════════════════════════════════════════════════ -->
   <div class="scr on" id="sLogin">
     <div class="login-grid"></div>
+
+    <!-- Mobile top brand (small screens only — CSS handles hide/show) -->
     <div class="l-mob-brand">
-      <div
-        style="background:#fff;border-radius:20px;padding:12px 20px;display:inline-flex;align-items:center;justify-content:center;box-shadow:0 4px 20px rgba(0,0,0,.18);margin-bottom:4px">
-        <img src="https://joolry.in/cdn/shop/files/Joolry_Logo_160x.png?v=1661766461"
-          style="width:100px;height:44px;object-fit:contain;display:block"
-          onerror="this.parentElement.innerHTML='<span style=\'font-size:22px;font-weight:900;color:#111111;letter-spacing:-1px\'>Joolry</span>'">
+      <div class="l-mob-logo">
+        <img src="https://joolry.in/cdn/shop/files/Joolry_Logo_160x.png?v=1661766461" alt="Joolry"
+          onerror="this.parentElement.innerHTML='<span class=\'l-mob-txt\'>Joolry</span>'">
       </div>
-      <div style="color:#fff;font-size:22px;font-weight:900;margin-top:16px;letter-spacing:-.3px">Joolry Daily App</div>
-      <div style="color:rgba(255,255,255,.9);font-size:13px;font-weight:700;margin-top:8px;letter-spacing:.2em">JOOLRY</div>
     </div>
+
     <div class="lbox">
       <div class="l-logo-wrap" id="lDeskLogo">
-        <img src="https://joolry.in/cdn/shop/files/Joolry_Logo_160x.png?v=1661766461" alt="Joolry Logo"
+        <img src="https://joolry.in/cdn/shop/files/Joolry_Logo_160x.png?v=1661766461" alt="Joolry"
           onerror="this.style.display='none';document.getElementById('lgFallback').style.display='flex'">
         <div class="l-logo-fallback" id="lgFallback" style="display:none">JL</div>
       </div>
-      <div class="l-title">Joolry Daily App</div>
-      <div class="l-sub" style="letter-spacing:.2em;font-weight:700">JOOLRY</div>
+
+      <div class="l-title">Welcome back</div>
+      <div class="l-sub">Sign in to continue</div>
+
       <div class="l-field">
-        <label>Email Address</label>
+        <label>Email</label>
         <input type="email" id="femail" placeholder="you@joolry.co.in" autocomplete="email"
           onkeydown="if(event.key==='Enter')document.getElementById('fpass').focus()">
         <span class="l-ico"><i class="fas fa-envelope"></i></span>
       </div>
+
       <div class="l-field">
         <label>Password</label>
         <input type="password" id="fpass" placeholder="••••••••" autocomplete="current-password"
@@ -95,11 +97,12 @@
           <i class="fas fa-eye"></i>
         </button>
       </div>
+
       <button class="l-btn" id="btnLogin" onclick="_doLogin()">
-        <i class="fas fa-sign-in-alt"></i> Sign In
+        Sign In
       </button>
       <div class="l-err" id="loginErr"></div>
-      <div class="l-footer">Joolry Daily &nbsp;&bull;&nbsp; <span id="build-stamp">build 2026-10-11-mobile-v33</span> &nbsp;&bull;&nbsp; All rights reserved &copy; 2026</div>
+      <div class="l-footer">© Joolry</div>
     </div>
   </div>
 
