@@ -18,7 +18,7 @@ window.APP_CONFIG = {
 
   // ── Session ─────────────────────────────────────────────────────────────
   SESSION_KEY:     'joolry_session_v1',
-  SESSION_HOURS:   12,    // overridden by AppConfig from server
+  SESSION_HOURS:   168,   // 7 days; can still override via AppConfig sheet
 
   // ── API Timeouts ─────────────────────────────────────────────────────────
   DEFAULT_TIMEOUT: 30000,   // 30s
