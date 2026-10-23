@@ -2724,9 +2724,10 @@
           '<div id="dashCelebrations" style="display:none;margin-bottom:14px"></div>' +
 
           // ── KPI grid ──
-          '<div class="krow" id="dashKrow">' +
+                 '<div class="krow" id="dashKrow">' +
           [1, 2, 3, 4].map(function () {return '<div class="sk sk-h6" style="border-radius:14px"></div>';}).join('') +
           '</div>' +
+          '<div id="dashAttention" style="display:none;margin:12px 0 4px"></div>' +
 
           // ── Quick action tiles — role-aware (staff vs manager)
           (function () {
@@ -2953,6 +2954,51 @@
           '<div class="pbar-wrap"><div class="pbar" style="width:' + pct + '%;background:' + (pct >= 80 ? 'var(--G)' : pct >= 60 ? 'var(--O)' : 'var(--R)') + '"></div></div>' +
           '<div style="font-size:10.5px;color:var(--tx3);margin-top:6px;font-weight:600">' + new Date().toLocaleDateString('en-IN', {month: 'long', year: 'numeric'}) + '</div>';
       });
+    }
+
+    function _renderDashAttention(stats) {
+      var el = document.getElementById('dashAttention');
+      if (!el) return;
+      if (!_isManager()) { el.style.display = 'none'; el.innerHTML = ''; return; }
+
+      var s = stats || _D.dashStats || {};
+      var pending = Number(s.pendingTasks || 0);
+      var overdue = Number(s.overdueDelegations || 0);
+      var noOut = Number(s.teamNoCheckout || s.noCheckout || 0);
+      var leaves = Number(s.pendingLeaves || s.leavePending || 0);
+      var items = [];
+
+      if (pending > 0) {
+        items.push({ t: pending + ' pending task' + (pending > 1 ? 's' : ''), ico: 'fa-list-check', go: 'check' });
+      }
+      if (overdue > 0) {
+        items.push({ t: overdue + ' overdue delegation' + (overdue > 1 ? 's' : ''), ico: 'fa-people-arrows', go: 'deleg' });
+      }
+      if (noOut > 0) {
+        items.push({ t: noOut + ' still need check-out', ico: 'fa-right-from-bracket', go: 'attend' });
+      }
+      if (leaves > 0) {
+        items.push({ t: leaves + ' leave request' + (leaves > 1 ? 's' : '') + ' pending', ico: 'fa-umbrella-beach', go: 'attend' });
+      }
+
+      if (!items.length) {
+        el.style.display = 'none';
+        el.innerHTML = '';
+        return;
+      }
+
+      el.style.display = '';
+      el.innerHTML =
+        '<div style="border:1.5px solid rgba(217,119,6,.35);background:linear-gradient(135deg,#fffbeb,#fef3c7);border-radius:14px;padding:12px 14px">' +
+        '<div style="font-size:12px;font-weight:800;color:#b45309;margin-bottom:8px;letter-spacing:.02em">' +
+        '<i class="fas fa-bolt"></i> Needs attention</div>' +
+        '<div style="display:flex;flex-wrap:wrap;gap:8px">' +
+        items.map(function (it) {
+          return '<button type="button" onclick="_loadV(\'' + it.go + '\')" style="border:none;cursor:pointer;padding:8px 12px;border-radius:999px;background:#fff;color:#92400e;font-size:12px;font-weight:700;box-shadow:0 1px 3px rgba(0,0,0,.06)">' +
+            '<i class="fas ' + it.ico + '" style="margin-right:6px;opacity:.85"></i>' + _esc(it.t) +
+            '</button>';
+        }).join('') +
+        '</div></div>';
     }
 
     /* ══════════════════════════════════════════════════════════
@@ -12228,10 +12274,18 @@
               }
               _toast('❌ ' + (r.error || 'Task update nahi hui'), 'err');
               _loadToday();
-            } else {
+                      } else {
               _toast('✅ Done!', 'ok');
-              // Soft refresh so KPIs / sort sync (SWR = instant)
-              _loadToday();
+              // Keep optimistic row; only refresh progress, not full list flicker
+              if (Array.isArray(_D.todayTasks) && typeof _ckRenderProgress === 'function') {
+                _ckRenderProgress(_D.todayTasks);
+              }
+              // Optional: re-sort silently after 1.2s without killing animation
+              setTimeout(function () {
+                if (window._curView === 'check' && typeof _loadToday === 'function') {
+                  _loadToday();
+                }
+              }, 1200);
             }
           }, function (e) {
             // Rollback on network error
@@ -15287,6 +15341,7 @@ function _loadEmpDetail(empId) {
             '<div class="kpi-lbl">' + k.lbl + '</div>' +
             '<div style="font-size:10px;color:var(--tx3);margin-top:3px">' + k.desc + '</div></div>';
         }).join('');
+        _renderDashAttention(stats);
       }
 
       if (_D.dashStats) {
@@ -15450,6 +15505,70 @@ function _loadEmpDetail(empId) {
       }).catch(function () { });
     }
 
+        // ── Offline banner ────────────────────────────────────────────────────
+    (function () {
+      function ensureBanner() {
+        var b = document.getElementById('fkOfflineBar');
+        if (b) return b;
+        b = document.createElement('div');
+        b.id = 'fkOfflineBar';
+        b.setAttribute('role', 'status');
+        b.style.cssText = 'display:none;position:fixed;top:0;left:0;right:0;z-index:10001;padding:10px 16px;text-align:center;font-size:13px;font-weight:700;background:#111827;color:#fff;box-shadow:0 4px 16px rgba(0,0,0,.2)';
+        b.innerHTML = '<i class="fas fa-wifi" style="margin-right:8px;opacity:.8"></i>You\'re offline — showing last saved data';
+        document.body.appendChild(b);
+        return b;
+      }
+      function sync() {
+        var b = ensureBanner();
+        var offline = (typeof navigator !== 'undefined' && navigator.onLine === false);
+        b.style.display = offline ? 'block' : 'none';
+        document.body.style.paddingTop = offline ? '40px' : '';
+      }
+      window.addEventListener('online', sync);
+      window.addEventListener('offline', sync);
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', sync);
+      } else {
+        sync();
+      }
+    })();
+
+    // ── PWA install prompt (Add to Home Screen) ───────────────────────────
+    (function () {
+      var deferred = null;
+      window.addEventListener('beforeinstallprompt', function (e) {
+        e.preventDefault();
+        deferred = e;
+        if (localStorage.getItem('fk_install_dismissed') === '1') return;
+        var bar = document.getElementById('fkInstallBar');
+        if (bar) return;
+        bar = document.createElement('div');
+        bar.id = 'fkInstallBar';
+        bar.style.cssText = 'position:fixed;bottom:72px;left:12px;right:12px;z-index:9990;max-width:420px;margin:0 auto;padding:12px 14px;border-radius:14px;background:var(--sur,#fff);border:1.5px solid var(--bdr,#e5e7eb);box-shadow:0 12px 40px rgba(0,0,0,.18);display:flex;align-items:center;gap:12px';
+        bar.innerHTML =
+          '<div style="flex:1;min-width:0">' +
+          '<div style="font-size:13px;font-weight:800;color:var(--tx,#111)">Install Joolry Daily</div>' +
+          '<div style="font-size:11px;color:var(--tx3,#6b7280);margin-top:2px">Home screen se app ki tarah kholo</div>' +
+          '</div>' +
+          '<button type="button" id="fkInstallBtn" style="border:none;border-radius:10px;padding:8px 12px;font-weight:800;font-size:12px;background:#111;color:#fff;cursor:pointer">Install</button>' +
+          '<button type="button" id="fkInstallX" style="border:none;background:transparent;color:var(--tx3);font-size:16px;cursor:pointer;padding:4px 6px" aria-label="Dismiss">×</button>';
+        document.body.appendChild(bar);
+        document.getElementById('fkInstallBtn').onclick = function () {
+          if (!deferred) return;
+          deferred.prompt();
+          deferred.userChoice.then(function () {
+            deferred = null;
+            var el = document.getElementById('fkInstallBar');
+            if (el) el.remove();
+          });
+        };
+        document.getElementById('fkInstallX').onclick = function () {
+          try { localStorage.setItem('fk_install_dismissed', '1'); } catch (e) { }
+          var el = document.getElementById('fkInstallBar');
+          if (el) el.remove();
+        };
+      });
+    })();
 
 
 
