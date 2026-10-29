@@ -338,13 +338,59 @@ function buildLeaveSummary(snap, doer, empIdArg, monthYear) {
     const st = String(r.status || '');
     if (st === 'Pending') pending++;
     else if (st === 'Rejected') rejected++;
-    else if (st === 'Approved') { const lt = String(r.leave_type || 'PTO'); counts[lt] = (counts[lt] || 0) + (parseFloat(r.num_days) || 1); }
+    else if (st === 'Approved') {
+      const lt = String(r.leave_type || 'PTO');
+      counts[lt] = (counts[lt] || 0) + (parseFloat(r.num_days) || 1);
+    }
   });
   const yr = parseInt(month.split('-')[0], 10), mo = parseInt(month.split('-')[1], 10);
   let sundays = 0;
-  if (yr && mo) { const dim = new Date(yr, mo, 0).getDate(); for (let d = 1; d <= dim; d++) if (new Date(yr, mo - 1, d).getDay() === 0) sundays++; }
-  const woTaken = counts['Weekly Off'] || 0, ptoTaken = counts['PTO'] || counts['Paid Leave'] || 0, unpaid = counts['Unpaid'] || counts['LWP'] || 0;
-  return [{ emp_id: code, month_year: month, sick_leave: counts['Sick Leave'] || 0, paid_leave: ptoTaken, casual_leave: counts['Casual Leave'] || 0, comp_off: counts['Comp Off'] || 0, wfh: counts['WFH'] || 0, lwp: unpaid, week_off_entitlement: sundays, week_off_taken: woTaken, week_off_remaining: Math.max(0, sundays - woTaken), week_off_worked: Math.max(0, sundays - woTaken), pto_taken: ptoTaken, unpaid_taken: unpaid, total_approved: woTaken + ptoTaken + unpaid + (counts['Sick Leave'] || 0) + (counts['Casual Leave'] || 0), total_pending: pending, total_rejected: rejected }];
+  if (yr && mo) {
+    const dim = new Date(yr, mo, 0).getDate();
+    for (let d = 1; d <= dim; d++) if (new Date(yr, mo - 1, d).getDay() === 0) sundays++;
+  }
+  const woTaken = counts['Weekly Off'] || 0;
+  const ptoTaken = counts['PTO'] || counts['Paid Leave'] || 0;
+  const unpaid = counts['Unpaid'] || counts['LWP'] || 0;
+
+  // PTO annual from doer.pto Yes/No
+  let ptoAnnual = 0;
+  const flag = String((doer && doer.pto) || '').trim().toLowerCase();
+  if (flag === 'yes' || flag === 'y' || flag === '1' || flag === 'true') ptoAnnual = 11;
+
+  // YTD PTO taken
+  let ptoTakenYtd = 0;
+  (snap.leaveRequests || []).forEach(r => {
+    if (String(r.emp_id || '') !== String(code)) return;
+    if (String(r.status || '') !== 'Approved') return;
+    const lt = String(r.leave_type || '');
+    if (lt !== 'PTO' && lt !== 'Paid Leave') return;
+    const fd = normDate(r.from_date);
+    if (fd && fd.substring(0, 4) === String(yr)) ptoTakenYtd += (parseFloat(r.num_days) || 1);
+  });
+
+  return [{
+    emp_id: code,
+    month_year: month,
+    sick_leave: counts['Sick Leave'] || 0,
+    paid_leave: ptoTaken,
+    casual_leave: counts['Casual Leave'] || 0,
+    comp_off: counts['Comp Off'] || 0,
+    wfh: counts['WFH'] || 0,
+    lwp: unpaid,
+    week_off_entitlement: sundays,
+    week_off_taken: woTaken,
+    week_off_remaining: Math.max(0, sundays - woTaken),
+    week_off_worked: Math.max(0, sundays - woTaken),
+    pto_taken: ptoTaken,
+    pto_entitled: ptoAnnual,
+    pto_taken_ytd: ptoTakenYtd,
+    pto_remaining: Math.max(0, ptoAnnual - ptoTakenYtd),
+    unpaid_taken: unpaid,
+    total_approved: woTaken + ptoTaken + unpaid + (counts['Sick Leave'] || 0) + (counts['Casual Leave'] || 0),
+    total_pending: pending,
+    total_rejected: rejected
+  }];
 }
 function buildLeaveBalance(snap, doer) {
   return buildLeaveSummary(snap, doer, null, (snap.today || istToday()).substring(0, 7))[0] || {};
@@ -462,7 +508,17 @@ function fromSnapshot(fn, args, email, snap) {
     case 'getAnnouncements': return buildAnnouncements(snap);
     case 'getAllAppConfigForFrontend': return snap.appConfig || {};
     case 'getHolidayList': return snap.holidays || [];
-    case 'getDoerList': return (snap.doers || []).map(d => ({ emp_id: d.emp_id, name: d.name, department: d.department || '', email: d.email || '', role: d.role || 'STAFF', photo: d.photo || '', phone: d.phone || '', week_off_day: d.week_off_day != null ? d.week_off_day : 0 }));
+case 'getDoerList': return (snap.doers || []).map(d => ({
+  emp_id: d.emp_id,
+  name: d.name,
+  department: d.department || '',
+  email: d.email || '',
+  role: d.role || 'STAFF',
+  photo: d.photo || '',
+  phone: d.phone || '',
+  week_off_day: d.week_off_day != null ? d.week_off_day : 0,
+  pto: d.pto || 'No'
+}));
     case 'getTeamAttendanceStatus': return buildTeamAttendance(snap, args[0]);
     case 'getTeamChecklistToday': {
       const dt = asDate(args[0]), cv = coverage(snap);
