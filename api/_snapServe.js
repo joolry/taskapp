@@ -31,10 +31,12 @@ function findDoer(snap, email) {
 function empCode(doer) {
   return String((doer && (doer.emp_id || doer.emp_code || doer.user_id)) || '');
 }
+
 function isManager(doer) {
   const r = String((doer && doer.role) || '').toUpperCase();
   return r === 'OWNER' || r === 'MANAGER' || r === 'EA' || r === 'ADMIN';
 }
+
 function doerNameMap(snap) {
   const m = {};
   (snap.doers || []).forEach(function (d) {
