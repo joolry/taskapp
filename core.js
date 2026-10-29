@@ -1630,12 +1630,17 @@
         if (_nA) _nA.style.display = '';
       }
 
-      if (_isManager()) {
-        var mgrNav = document.getElementById('mgrNav');
-        if (mgrNav) mgrNav.style.display = '';
-        // Show global Clear Cache / Sync button in topbar
-        var tbCache = document.getElementById('tbCacheBtn');
-        if (tbCache) tbCache.style.display = '';
+     if (_isManager()) {
+  var mgrNav = document.getElementById('mgrNav');
+  if (mgrNav) mgrNav.style.display = '';
+  
+  // Salary Sheet sirf Owner/Manager ko
+  var nvPay = document.getElementById('nv-payroll');
+  if (nvPay) {
+    nvPay.style.display = _canAccessPayroll() ? '' : 'none';
+  }
+  
+  var tbCache = document.getElementById('tbCacheBtn');
       }
       if (_dark) {
         var darkIco = document.getElementById('darkIco');
@@ -2741,7 +2746,11 @@
               {ico: 'fa-address-card', lbl: 'Directory', view: 'empdir', c1: '#92400E', c2: '#F59E0B', mgr: true},
               {ico: 'fa-file-invoice-dollar', lbl: 'Salary', view: 'payroll', c1: '#111111', c2: '#4A4A4A', mgr: true},
               {ico: 'fa-table-columns', lbl: 'EM Board', view: 'em', c1: '#0E7490', c2: '#22D3EE', mgr: true}
-            ].filter(function (a) { return a.all || (a.mgr && isMgr); });
+            ].filter(function (a) {
+  if (a.all) return true;
+  if (a.view === 'payroll') return typeof _canAccessPayroll === 'function' && _canAccessPayroll();
+  return a.mgr && isMgr;
+});
             return '<div class="dash-qa-grid" id="dashQuickAct">' +
               tiles.map(function (a) {
                 return '<button class="qa-tile" onclick="_loadV(\'' + a.view + '\')">' +
@@ -7671,7 +7680,11 @@
 
       // Index navigation routes
       _navRoutes.forEach(function (n) {
-        if (n.mgr && !_isManager()) return;
+       if (n.route === 'payroll') {
+  if (typeof _canAccessPayroll !== 'function' || !_canAccessPayroll()) return;
+} else if (n.mgr && !_isManager()) {
+  return;
+}
         _searchIdx.push({type: 'nav', title: n.title, meta: n.meta, route: n.route, ico: n.ico, bg: 'var(--Pl)', c: 'var(--P)'});
       });
 
@@ -13623,12 +13636,12 @@
       return n.getFullYear() + '-' + (m < 10 ? '0' : '') + m;
     }
 
-    function _vPayroll() {
-      if (!_isManager()) {
-        document.getElementById('content').innerHTML =
-          '<div class="empty-state"><i class="fas fa-lock"></i><h4>Access Restricted</h4><p>Manager access required.</p></div>';
-        return;
-      }
+  function _vPayroll() {
+  if (!_canAccessPayroll()) {
+    document.getElementById('content').innerHTML =
+      '<div class="empty-state"><i class="fas fa-lock"></i><h4>Access Restricted</h4><p>Only Owner / Manager can access Salary Sheet.</p></div>';
+    return;
+  }
 
       document.getElementById('content').innerHTML =
         '<div class="mod-head">' +
@@ -14744,11 +14757,17 @@
     /* Skeleton loader helper: n rows of type cls (default sk-h4) */
 
     /* Role-based check: true if logged-in user is Manager or Owner */
-    function _isManager() {
-      if (!_U) return false;
-      var r = String((_U || {}).role || '').toUpperCase();
-      return r === 'OWNER' || r === 'MANAGER';
-    }
+  function _isManager() {
+  if (!_U) return false;
+  var r = String((_U || {}).role || '').toUpperCase();
+  return r === 'OWNER' || r === 'MANAGER' || r === 'EA';
+}
+
+function _canAccessPayroll() {
+  if (!_U) return false;
+  var r = String((_U || {}).role || '').toUpperCase();
+  return r === 'OWNER' || r === 'MANAGER';
+}
 
     function _isMarkAttendanceAllowed() {
       if (!_U) return false;
