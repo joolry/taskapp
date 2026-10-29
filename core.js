@@ -14757,10 +14757,10 @@
     /* Skeleton loader helper: n rows of type cls (default sk-h4) */
 
     /* Role-based check: true if logged-in user is Manager or Owner */
-  function _isManager() {
+function _isManager() {
   if (!_U) return false;
   var r = String((_U || {}).role || '').toUpperCase();
-  return r === 'OWNER' || r === 'MANAGER' || r === 'EA';
+  return r === 'OWNER' || r === 'MANAGER' || r === 'EA' || r === 'ADMIN';
 }
 
 function _canAccessPayroll() {
@@ -14769,11 +14769,11 @@ function _canAccessPayroll() {
   return r === 'OWNER' || r === 'MANAGER';
 }
 
-    function _isMarkAttendanceAllowed() {
-      if (!_U) return false;
-      var r = String((_U || {}).role || '').toUpperCase();
-      return r === 'OWNER' || r === 'MANAGER' || r === 'COORDINATOR';
-    }
+function _isMarkAttendanceAllowed() {
+  if (!_U) return false;
+  var r = String((_U || {}).role || '').toUpperCase();
+  return r === 'OWNER' || r === 'MANAGER' || r === 'EA' || r === 'COORDINATOR' || r === 'ADMIN';
+}
 
     /* ══════════════════════════════════════════════════════════════════════
        KEYBOARD SHORTCUTS PANEL
