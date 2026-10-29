@@ -33,7 +33,7 @@ function empCode(doer) {
 }
 function isManager(doer) {
   const r = String((doer && doer.role) || '').toUpperCase();
-  return r === 'OWNER' || r === 'MANAGER' || r === 'ADMIN';
+  return r === 'OWNER' || r === 'MANAGER' || r === 'EA' || r === 'ADMIN';
 }
 function doerNameMap(snap) {
   const m = {};
@@ -427,8 +427,8 @@ function buildCelebrations(snap) {
       if (!norm || norm.length < 10 || norm.substring(5) !== md) return;
       out.push({ emp_id: d.emp_id, name: d.name, dept: d.department || '', type, icon, label, date: norm });
     }
+    // Only birthdays — no anniversaries
     check(d.dob, 'birthday', '🎂', 'Birthday');
-    check(d.anniversary || d.doj, 'anniversary', '🎉', 'Work Anniversary');
   });
   return out;
 }
