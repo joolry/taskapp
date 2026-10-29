@@ -14089,116 +14089,124 @@
       }
     }
 
-    function _prExportCSV() {
-      if (!_prData || !_prData.employees) return;
-      var head = ['Emp ID', 'Name', 'Dept', 'Month', 'Working Days', 'Present', 'Half Day', 'Leave', 'Absent/LWP',
-        'Week Off', 'Holidays', 'Payable Days',
-        'Basic', 'HRA', 'Conv', 'Other Allow', 'Gross', 'PF', 'ESI', 'TDS', 'Other Ded', 'LWP Ded', 'Total Ded', 'Net Pay'];
-      var rows = [head].concat((_prData.employees).map(function (e) {
-        var hdCount = (e.daily_log || []).filter(function (d) { return d.status === 'HD'; }).length;
-        return ['"' + e.emp_id + '"', '"' + e.emp_name + '"', '"' + e.dept + '"', _prData.month,
-        e.total_working_days, e.present_days, hdCount, e.leave_days, (e.absent_days + e.lwp_days),
-        (e.week_off_days || 0), (e.holiday_days || 0), (e.payable_days || 0),
-        e.basic_salary, e.hra, e.conveyance, e.other_allowances, e.gross_salary,
-        e.pf_deduction, e.esi_deduction, e.tds, e.other_deductions, e.lwp_deduction,
-        e.total_deductions, e.net_salary];
-      }));
-      var csv = rows.map(function (r) {return r.join(',');}).join('\n');
-      var a = document.createElement('a');
-      a.href = 'data:text/csv;charset=utf-8,\uFEFF' + encodeURIComponent(csv);
-      a.download = 'payroll_summary_' + (_prData.month || _currMonth()) + '.csv';
-      a.click();
-      _toast('Summary exported!', 'ok');
-    }
+function _prExportCSV() {
+  if (!_prData || !_prData.employees) { _toast('No data to export', 'err'); return; }
+  var rows = [
+    ['Emp ID', 'Name', 'Department', 'Monthly Salary', 'Daily Rate',
+      'WO Entitlement', 'WO Taken', 'WO Worked', 'Extra Pay',
+      'PTO Taken', 'PTO Annual', 'Absent Days', 'Unpaid Days',
+      'Present Days', 'Half Days',
+      'Gross', 'PF', 'ESI', 'TDS', 'Other Ded', 'LWP Ded', 'Total Ded', 'NET PAY']
+  ];
+  _prData.employees.forEach(function (e) {
+    rows.push([
+      e.emp_id,
+      e.emp_name,
+      e.dept,
+      e.gross_salary || e.basic_salary || 0,
+      e.daily_rate || e.per_day_salary || 0,
+      e.week_off_entitlement || 0,
+      e.week_off_taken || 0,
+      e.week_off_worked || 0,
+      e.extra_pay || 0,
+      e.pto_taken || 0,
+      e.pto_annual || 0,
+      e.absent_days || 0,
+      e.unpaid_days || e.lwp_days || 0,
+      e.present_days || 0,
+      e.half_days || 0,
+      e.gross_salary || 0,
+      e.pf_deduction || 0,
+      e.esi_deduction || 0,
+      e.tds || 0,
+      e.other_deductions || 0,
+      e.lwp_deduction || 0,
+      e.total_deductions || 0,
+      e.net_salary || 0
+    ]);
+  });
+  // totals
+  rows.push([]);
+  rows.push([
+    '', 'TOTALS', '',
+    '', '', '', '', '',
+    _prData.employees.reduce(function (s, e) { return s + (e.extra_pay || 0); }, 0),
+    '', '', '', '', '', '',
+    _prData.summary.total_gross || 0,
+    '', '', '', '',
+    '',
+    _prData.summary.total_deductions || 0,
+    _prData.summary.total_net || 0
+  ]);
+  _downloadCSV(rows, 'salary_summary_' + (_prData.month || _currMonth()) + '.csv');
+  _toast('Summary CSV downloaded', 'ok');
+}
+
+
+function _downloadCSV(rows, filename) {
+  var csv = rows.map(function (r) {
+    return r.map(function (c) {
+      var s = String(c == null ? '' : c);
+      if (s.indexOf(',') >= 0 || s.indexOf('"') >= 0 || s.indexOf('\n') >= 0) {
+        return '"' + s.replace(/"/g, '""') + '"';
+      }
+      return s;
+    }).join(',');
+  }).join('\n');
+  var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+}
+
+
 
     // Full Detail Export — Excel-friendly, all staff with IN/OUT + attendance + salary
-    function _prExportDetailCSV() {
-      if (!_prData || !_prData.employees) {_toast('No data loaded', 'err'); return;}
-      var month = _prData.month || _currMonth();
-      var emps = _prData.employees || [];
-      var DAY_N = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
-      // Helper: escape for CSV
-      function q(v) {return '"' + String(v === null || v === undefined ? '' : v).replace(/"/g, '""') + '"';}
-
-      var lines = [];
-
-      // ── HEADER SECTION ──────────────────────────────────────────────────
-      lines.push(q('SALARY SHEET — ' + month) + ',,,,,,,,,,,,,,,,,,,,,,,,,,,');
-      lines.push(q('Generated: ' + new Date().toLocaleString('en-IN')) + ',,,,,,,,,,,,,,,,,,,,,,,,,,,');
-      lines.push('');
-
-      // ── SUMMARY TABLE ────────────────────────────────────────────────────
-      lines.push(q('--- SALARY SUMMARY ---') + ',,,,,,,,,,,,,,,,,,,,,,,,,,,');
-      var sumHead = [
-        'Emp ID', 'Name', 'Department',
-        'Working Days', 'Present', 'Half Day', 'Leave Days', 'Absent+LWP',
-        'Payable Days',
-        'Basic (₹)', 'HRA (₹)', 'Conv (₹)', 'Other Allow (₹)', 'Gross (₹)',
-        'PF (₹)', 'ESI (₹)', 'TDS (₹)', 'Other Ded (₹)', 'LWP Ded (₹)', 'Total Ded (₹)',
-        'NET PAY (₹)'
-      ];
-      lines.push(sumHead.map(q).join(','));
-
-      emps.forEach(function (e) {
-        lines.push([
-          e.emp_id, e.emp_name, e.dept,
-          e.total_working_days,
-          e.present_days,
-          // half day count from daily_log
-          (e.daily_log || []).filter(function (d) {return d.status === 'HD';}).length,
-          e.leave_days, (e.absent_days + e.lwp_days),
-          e.payable_days,
-          e.basic_salary, e.hra, e.conveyance, e.other_allowances, e.gross_salary,
-          e.pf_deduction, e.esi_deduction, e.tds, e.other_deductions, e.lwp_deduction,
-          e.total_deductions,
-          e.net_salary
-        ].map(q).join(','));
-      });
-
-      lines.push('');
-      lines.push('');
-
-      // ── DETAIL LOG TABLE ─────────────────────────────────────────────────
-      lines.push(q('--- DAILY ATTENDANCE DETAIL ---') + ',,,,,,,,,,,');
-      var detHead = [
-        'Emp ID', 'Name', 'Department',
-        'Date', 'Day', 'Status', 'IN Time', 'OUT Time', 'Hours Worked',
-        'Leave Type', 'Remark'
-      ];
-      lines.push(detHead.map(q).join(','));
-
-      emps.forEach(function (e) {
-        var log = e.daily_log || [];
-        if (!log.length) {
-          lines.push([e.emp_id, e.emp_name, e.dept, '—', '—', '—', '—', '—', '—', '—', '—'].map(q).join(','));
-          return;
-        }
-        // Blank separator row before each employee's days
-        lines.push([e.emp_id, e.emp_name + ' (' + e.dept + ')', '', '', '', '', '', '', '', '', ''].map(q).join(','));
-        log.forEach(function (d) {
-          var dow = DAY_N[new Date(d.date + 'T00:00:00').getDay()];
-          var ltype = (d.status !== 'P' && d.status !== 'HD' && d.status !== 'A' && d.status !== 'WO' && d.status !== 'H') ? d.status : '';
-          var stLabel = d.status === 'P' ? 'Present' : d.status === 'HD' ? 'Half Day' : d.status === 'A' ? 'Absent' : d.status === 'WO' ? 'Week Off' : d.status === 'H' ? 'Holiday' : ltype || d.status;
-          lines.push([
-            '', '', '',   // emp cols blank after header row
-            d.date, dow, stLabel,
-            d.in || '—', d.out || '—', d.hours || '—',
-            ltype, ''
-          ].map(q).join(','));
-        });
-        // Per-employee salary footer row
-        lines.push(['', '', '', '', '', '', '', '', '', 'GROSS: ₹' + _prFmt(e.gross_salary) + ' | DED: ₹' + _prFmt(e.total_deductions) + ' | NET: ₹' + _prFmt(e.net_salary), ''].map(q).join(','));
-        lines.push('');
-      });
-
-      var csv = lines.join('\n');
-      var a = document.createElement('a');
-      a.href = 'data:text/csv;charset=utf-8,\uFEFF' + encodeURIComponent(csv);
-      a.download = 'salary_full_detail_' + month + '.csv';
-      a.click();
-      _toast('Full detail exported — Excel mein kholo!', 'ok');
-    }
+function _prExportDetailCSV() {
+  if (!_prData || !_prData.employees) { _toast('No data to export', 'err'); return; }
+  var rows = [
+    ['Emp ID', 'Name', 'Department', 'Date', 'Day', 'Status', 'IN', 'OUT', 'Hours', 'Leave Type']
+  ];
+  var dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  _prData.employees.forEach(function (e) {
+    (e.daily_log || []).forEach(function (d) {
+      if (d.status === '—') return; // skip future / pre-join
+      var dt = d.date || '';
+      var dow = '';
+      try {
+        var p = dt.split('-');
+        dow = dayNames[new Date(+p[0], +p[1] - 1, +p[2]).getDay()];
+      } catch (err) { }
+      rows.push([
+        e.emp_id,
+        e.emp_name,
+        e.dept,
+        dt,
+        dow,
+        d.status || '',
+        d.in || '',
+        d.out || '',
+        d.hours || '',
+        d.leave_type || ''
+      ]);
+    });
+    // per-emp totals line
+    rows.push([
+      e.emp_id, e.emp_name, e.dept,
+      '', '',
+      'NET=' + (e.net_salary || 0),
+      'Extra=' + (e.extra_pay || 0),
+      'UnpaidDays=' + (e.unpaid_days || 0),
+      'WO=' + (e.week_off_taken || 0) + '/' + (e.week_off_entitlement || 0),
+      'PTO=' + (e.pto_taken || 0)
+    ]);
+    rows.push([]);
+  });
+  _downloadCSV(rows, 'salary_detail_' + (_prData.month || _currMonth()) + '.csv');
+  _toast('Detail CSV downloaded', 'ok');
+}
 
     // Download individual employee salary card — polished Excel-friendly CSV
     function _prDownloadCard(empId) {
