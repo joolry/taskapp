@@ -11491,25 +11491,23 @@
        Creates a UTF-8 BOM CSV and triggers browser download.
        UTF-8 BOM is prepended so Excel opens it correctly.
     ══════════════════════════════════════════════════════════════════════ */
-    function _downloadCSV(filename, rows) {
-      var csv = '\uFEFF' + rows.map(function (row) {
-        return row.map(function (cell) {
-          var s = String(cell == null ? '' : cell);
-          if (s.indexOf(',') > -1 || s.indexOf('"') > -1 || s.indexOf('\n') > -1)
-            s = '"' + s.replace(/"/g, '""') + '"';
-          return s;
-        }).join(',');
-      }).join('\r\n');
-
-      var blob = new Blob([csv], {type: 'text/csv;charset=utf-8;'});
-      var url = URL.createObjectURL(blob);
-      var a = document.createElement('a');
-      a.href = url; a.download = filename; a.style.display = 'none';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    }
+function _downloadCSV(rows, filename) {
+  var csv = rows.map(function (r) {
+    return r.map(function (c) {
+      var s = String(c == null ? '' : c);
+      if (s.indexOf(',') >= 0 || s.indexOf('"') >= 0 || s.indexOf('\n') >= 0) {
+        return '"' + s.replace(/"/g, '""') + '"';
+      }
+      return s;
+    }).join(',');
+  }).join('\n');
+  var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+}
 
     /* ══════════════════════════════════════════════════════════════════════
        TAB SYSTEM — Build tab headers + pane containers
@@ -14092,8 +14090,9 @@
 function _prExportCSV() {
   if (!_prData || !_prData.employees) { _toast('No data to export', 'err'); return; }
   var rows = [
-    ['Emp ID', 'Name', 'Department', 'Monthly Salary', 'Daily Rate',
-      'WO Entitlement', 'WO Taken', 'WO Worked', 'Extra Pay',
+    ['Emp ID', 'Name', 'Department', 'Monthly Salary', 'Daily Rate', 'Std Hours',
+      'WO Entitlement', 'WO Taken', 'WO Worked', 'Extra Pay (WO)',
+      'OT Hours', 'OT Pay',
       'PTO Taken', 'PTO Annual', 'Absent Days', 'Unpaid Days',
       'Present Days', 'Half Days',
       'Gross', 'PF', 'ESI', 'TDS', 'Other Ded', 'LWP Ded', 'Total Ded', 'NET PAY']
@@ -14105,10 +14104,13 @@ function _prExportCSV() {
       e.dept,
       e.gross_salary || e.basic_salary || 0,
       e.daily_rate || e.per_day_salary || 0,
+      e.std_hours || 0,
       e.week_off_entitlement || 0,
       e.week_off_taken || 0,
       e.week_off_worked || 0,
       e.extra_pay || 0,
+      e.ot_hours || 0,
+      e.ot_pay || 0,
       e.pto_taken || 0,
       e.pto_annual || 0,
       e.absent_days || 0,
@@ -14125,16 +14127,15 @@ function _prExportCSV() {
       e.net_salary || 0
     ]);
   });
-  // totals
   rows.push([]);
   rows.push([
-    '', 'TOTALS', '',
-    '', '', '', '', '',
+    '', 'TOTALS', '', '', '', '', '', '', '',
     _prData.employees.reduce(function (s, e) { return s + (e.extra_pay || 0); }, 0),
+    _prData.employees.reduce(function (s, e) { return s + (e.ot_hours || 0); }, 0),
+    _prData.employees.reduce(function (s, e) { return s + (e.ot_pay || 0); }, 0),
     '', '', '', '', '', '',
     _prData.summary.total_gross || 0,
-    '', '', '', '',
-    '',
+    '', '', '', '', '',
     _prData.summary.total_deductions || 0,
     _prData.summary.total_net || 0
   ]);
@@ -14167,12 +14168,12 @@ function _downloadCSV(rows, filename) {
 function _prExportDetailCSV() {
   if (!_prData || !_prData.employees) { _toast('No data to export', 'err'); return; }
   var rows = [
-    ['Emp ID', 'Name', 'Department', 'Date', 'Day', 'Status', 'IN', 'OUT', 'Hours', 'Leave Type']
+    ['Emp ID', 'Name', 'Department', 'Date', 'Day', 'Status', 'IN', 'OUT', 'Hours', 'Leave Type', 'OT Hours']
   ];
   var dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   _prData.employees.forEach(function (e) {
     (e.daily_log || []).forEach(function (d) {
-      if (d.status === '—') return; // skip future / pre-join
+      if (d.status === '—') return;
       var dt = d.date || '';
       var dow = '';
       try {
@@ -14189,18 +14190,19 @@ function _prExportDetailCSV() {
         d.in || '',
         d.out || '',
         d.hours || '',
-        d.leave_type || ''
+        d.leave_type || '',
+        d.ot || 0
       ]);
     });
-    // per-emp totals line
     rows.push([
       e.emp_id, e.emp_name, e.dept,
       '', '',
       'NET=' + (e.net_salary || 0),
-      'Extra=' + (e.extra_pay || 0),
+      'ExtraWO=' + (e.extra_pay || 0),
+      'OTPay=' + (e.ot_pay || 0),
       'UnpaidDays=' + (e.unpaid_days || 0),
       'WO=' + (e.week_off_taken || 0) + '/' + (e.week_off_entitlement || 0),
-      'PTO=' + (e.pto_taken || 0)
+      'OTHrs=' + (e.ot_hours || 0)
     ]);
     rows.push([]);
   });
