@@ -10445,9 +10445,10 @@ function _exportDaCSV() {
         '<option value="pct_desc">Presence % ↓</option><option value="pct_asc">Presence % ↑</option>' +
         '<option value="absent_desc">Absent ↓</option><option value="late_desc">Late ↓</option>' +
         '<option value="name_asc">Name A-Z</option></select>' +
-        '<div style="flex:1;min-width:8px"></div>' +
-        '<button class="btn btn-sm" onclick="_loadAtt()" style="white-space:nowrap"><i class="fas fa-chart-bar"></i> Analyze</button>' +
-        '</div>' +
+      '<div style="flex:1;min-width:8px"></div>' +
+'<button class="btn btn-sm btn-outline" onclick="_exportAttCSV()" style="white-space:nowrap"><i class="fas fa-file-export"></i> Export</button>' +
+'<button class="btn btn-sm" onclick="_loadAtt()" style="white-space:nowrap"><i class="fas fa-chart-bar"></i> Analyze</button>' +
+'</div>' +
 
         '<div id="attRoot">' + _skel(4) + '</div>';
 
