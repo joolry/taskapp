@@ -9720,39 +9720,44 @@ function _forcePortalCacheClear() {
       });
     }
 
-    function _exportClaCsv() {
-      var data = _D.claData;
-      if (!data) {_toast('Load analytics first', 'err'); return;}
-      var view = (document.getElementById('claView') || {}).value || 'overview';
-      var head, rows, name;
 
-      if (view === 'task') {
-        head = ['Task', 'Department', 'Frequency', 'Planned', 'Done', 'Pending', 'Completion %'];
-        rows = (data.by_task || []).map(function (t) {return ['"' + (t.task || '') + '"', '"' + (t.dept || '') + '"', t.freq || '', t.planned || 0, t.done || 0, t.pending || 0, (t.completion_rate || 0) + '%'];});
-        name = 'checklist_by_task';
-      } else if (view === 'aging') {
-        head = ['Employee', 'Department', 'Task', 'Frequency', 'Planned Date', 'Days Overdue'];
-        rows = (data.overdue_tasks || []).map(function (o) {return ['"' + (o.name || '') + '"', '"' + (o.dept || '') + '"', '"' + (o.task || '') + '"', o.freq || '', o.planned || '', o.days_overdue || 0];});
-        name = 'checklist_overdue';
-      } else if (view === 'dept') {
-        head = ['Department', 'Employees', 'Planned', 'Done', 'Pending', 'Completion %'];
-        rows = (data.by_dept || []).map(function (d) {return ['"' + (d.dept || '') + '"', d.employees || 0, d.planned || 0, d.done || 0, d.pending || 0, (d.completion_rate || 0) + '%'];});
-        name = 'checklist_by_dept';
-      } else {
-        head = ['Employee', 'Department', 'Planned', 'Done', 'Pending', 'Completion %', 'On-Time %', 'Avg Delay (days)'];
-        rows = (data.by_employee || []).map(function (e) {return ['"' + (e.name || '') + '"', '"' + (e.dept || '') + '"', e.planned || 0, e.done || 0, e.pending || 0, (e.completion_rate || 0) + '%', (e.on_time_rate || 0) + '%', e.avg_lag_days || 0];});
-        name = 'checklist_by_employee';
-      }
+function _exportClaCsv() {
+  var data = _D.claData;
+  if (!data) { _toast('Load analytics first', 'err'); return; }
+  var view = (document.getElementById('claView') || {}).value || 'overview';
+  var head, rows, name;
 
-      if (!rows.length) {_toast('No data to export', 'err'); return;}
-      var csv = [head.join(',')].concat(rows.map(function (r) {return r.join(',');})).join('\n');
-      var a = document.createElement('a');
-      a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent('\uFEFF' + csv);
-      a.download = name + '_' + (data.from || _currMonth()) + '_to_' + (data.to || _today()) + '.csv';
-      a.click();
-      _toast('Exported!', 'ok');
-    }
+  if (view === 'task') {
+    head = ['Task', 'Department', 'Frequency', 'Planned', 'Done', 'Pending', 'Shortfall %'];
+    rows = (data.by_task || []).map(function (t) {
+      return [t.task || '', t.dept || '', t.freq || '', t.planned || 0, t.done || 0, t.pending || 0, _shortfallPct(t.completion_rate) + '%'];
+    });
+    name = 'checklist_by_task';
+  } else if (view === 'aging') {
+    head = ['Employee', 'Department', 'Task', 'Frequency', 'Planned Date', 'Days Overdue'];
+    rows = (data.overdue_tasks || []).map(function (o) {
+      return [o.name || '', o.dept || '', o.task || '', o.freq || '', o.planned || '', o.days_overdue || 0];
+    });
+    name = 'checklist_overdue';
+  } else if (view === 'dept') {
+    head = ['Department', 'Employees', 'Planned', 'Done', 'Pending', 'Shortfall %'];
+    rows = (data.by_dept || []).map(function (d) {
+      return [d.dept || '', d.employees || 0, d.planned || 0, d.done || 0, d.pending || 0, _shortfallPct(d.completion_rate) + '%'];
+    });
+    name = 'checklist_by_dept';
+  } else {
+    head = ['Employee', 'Department', 'Planned', 'Done', 'Pending', 'Shortfall %', 'On-Time %', 'Avg Delay (days)'];
+    rows = (data.by_employee || []).map(function (e) {
+      return [e.name || '', e.dept || '', e.planned || 0, e.done || 0, e.pending || 0, _shortfallPct(e.completion_rate) + '%', (e.on_time_rate || 0) + '%', e.avg_lag_days || 0];
+    });
+    name = 'checklist_by_employee';
+  }
 
+  if (!rows.length) { _toast('No data to export', 'err'); return; }
+  rows.unshift(head);
+  _downloadCSV(name + '_' + (data.from || _currMonth()) + '_to_' + (data.to || _today()) + '.csv', rows);
+  _toast('Exported!', 'ok');
+}
 
 
 
@@ -10334,38 +10339,43 @@ function _forcePortalCacheClear() {
       });
     }
 
-    function _exportDaCSV() {
-      var data = _D.daData;
-      if (!data) {_toast('Load analytics first', 'err'); return;}
-      var view = (document.getElementById('daView') || {}).value || 'overview';
-      var head, rows, name;
+function _exportDaCSV() {
+  var data = _D.daData;
+  if (!data) { _toast('Load analytics first', 'err'); return; }
+  var view = (document.getElementById('daView') || {}).value || 'overview';
+  var head, rows, name;
 
-      if (view === 'giver') {
-        head = ['Delegator', 'Given', 'Completed', 'Pending', 'Overdue', 'Completion %'];
-        rows = (data.by_giver || []).map(function (g) {return ['"' + (g.name || '') + '"', g.given || 0, g.completed || 0, g.pending || 0, g.overdue || 0, (g.completion_rate || 0) + '%'];});
-        name = 'delegation_by_giver';
-      } else if (view === 'aging') {
-        head = ['Assignee', 'Department', 'Task', 'Delegator', 'Due Date', 'Days Overdue'];
-        rows = (data.overdue_tasks || []).map(function (o) {return ['"' + (o.name || '') + '"', '"' + (o.dept || '') + '"', '"' + (o.task || '') + '"', '"' + (o.giver || '') + '"', o.due || '', o.days_overdue || 0];});
-        name = 'delegation_overdue';
-      } else if (view === 'dept') {
-        head = ['Department', 'Employees', 'Assigned', 'Completed', 'Overdue', 'Completion %'];
-        rows = (data.by_dept || []).map(function (d) {return ['"' + (d.dept || '') + '"', d.employees || 0, d.assigned || 0, d.completed || 0, d.overdue || 0, (d.completion_rate || 0) + '%'];});
-        name = 'delegation_by_dept';
-      } else {
-        head = ['Employee', 'Department', 'Assigned', 'Completed', 'Pending', 'Overdue', 'Completion %', 'Avg Delay (days)'];
-        rows = (data.by_employee || []).map(function (e) {return ['"' + (e.name || '') + '"', '"' + (e.dept || '') + '"', e.assigned || 0, e.completed || 0, e.pending || 0, e.overdue || 0, (e.completion_rate || 0) + '%', e.avg_lag_days || 0];});
-        name = 'delegation_by_employee';
-      }
+  if (view === 'giver') {
+    head = ['Delegator', 'Given', 'Completed', 'Pending', 'Overdue', 'Shortfall %'];
+    rows = (data.by_giver || []).map(function (g) {
+      return [g.name || '', g.given || 0, g.completed || 0, g.pending || 0, g.overdue || 0, _shortfallPct(g.completion_rate) + '%'];
+    });
+    name = 'delegation_by_giver';
+  } else if (view === 'aging') {
+    head = ['Assignee', 'Department', 'Task', 'Delegator', 'Due Date', 'Days Overdue'];
+    rows = (data.overdue_tasks || []).map(function (o) {
+      return [o.name || '', o.dept || '', o.task || '', o.giver || '', o.due || '', o.days_overdue || 0];
+    });
+    name = 'delegation_overdue';
+  } else if (view === 'dept') {
+    head = ['Department', 'Employees', 'Assigned', 'Completed', 'Overdue', 'Shortfall %'];
+    rows = (data.by_dept || []).map(function (d) {
+      return [d.dept || '', d.employees || 0, d.assigned || 0, d.completed || 0, d.overdue || 0, _shortfallPct(d.completion_rate) + '%'];
+    });
+    name = 'delegation_by_dept';
+  } else {
+    head = ['Employee', 'Department', 'Assigned', 'Completed', 'Pending', 'Overdue', 'Shortfall %', 'Avg Delay (days)'];
+    rows = (data.by_employee || []).map(function (e) {
+      return [e.name || '', e.dept || '', e.assigned || 0, e.completed || 0, e.pending || 0, e.overdue || 0, _shortfallPct(e.completion_rate) + '%', e.avg_lag_days || 0];
+    });
+    name = 'delegation_by_employee';
+  }
 
-      if (!rows.length) {_toast('No data to export', 'err'); return;}
-      var csv = [head.join(',')].concat(rows.map(function (r) {return r.join(',');})).join('\n');
-      var a = document.createElement('a');
-      a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent('\uFEFF' + csv);
-      a.download = name + '_' + (data.from || 'all') + '_to_' + (data.to || _today()) + '.csv';
-      a.click();
-      _toast('Exported!', 'ok');
-    }
+  if (!rows.length) { _toast('No data to export', 'err'); return; }
+  rows.unshift(head);
+  _downloadCSV(name + '_' + (data.from || 'all') + '_to_' + (data.to || _today()) + '.csv', rows);
+  _toast('Exported!', 'ok');
+}
 
     /* ══════════════════════════════════════════════════════════════════════
        ATTENDANCE ANALYTICS MODULE (EXTENDED)
@@ -11499,22 +11509,30 @@ function _forcePortalCacheClear() {
        Creates a UTF-8 BOM CSV and triggers browser download.
        UTF-8 BOM is prepended so Excel opens it correctly.
     ══════════════════════════════════════════════════════════════════════ */
-function _downloadCSV(rows, filename) {
-  var csv = rows.map(function (r) {
-    return r.map(function (c) {
-      var s = String(c == null ? '' : c);
-      if (s.indexOf(',') >= 0 || s.indexOf('"') >= 0 || s.indexOf('\n') >= 0) {
-        return '"' + s.replace(/"/g, '""') + '"';
-      }
+function _downloadCSV(filename, rows) {
+  var csv = '\uFEFF' + rows.map(function (row) {
+    return row.map(function (cell) {
+      var s = String(cell == null ? '' : cell);
+      if (s.indexOf(',') > -1 || s.indexOf('"') > -1 || s.indexOf('\n') > -1)
+        s = '"' + s.replace(/"/g, '""') + '"';
       return s;
     }).join(',');
-  }).join('\n');
+  }).join('\r\n');
   var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  var url = URL.createObjectURL(blob);
   var a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
+  a.href = url;
   a.download = filename;
+  a.style.display = 'none';
+  document.body.appendChild(a);
   a.click();
-  setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function _shortfallPct(rate) {
+  var r = Number(rate || 0);
+  return Math.round(r - 100); // 87 → -13, 100 → 0, 0 → -100
 }
 
     /* ══════════════════════════════════════════════════════════════════════
@@ -13599,17 +13617,26 @@ function _downloadCSV(rows, filename) {
         }, '<i class="fas fa-check"></i> Confirm Applied');
     }
 
-    function _exportEM() {
-      var data = _D.emData;
-      if (!data) {_toast('Load data first', 'warn'); return;}
-      var doers = _emFilteredDoers();
-      var rows = [['#', 'Doer', 'Department', 'Checklist Plan', 'Checklist Actual', 'Delegation Plan', 'Delegation Actual', 'Attendance Plan', 'Attendance Actual', 'Total Plan', 'Total Actual', 'Score %']];
-      doers.forEach(function (e, i) {
-        rows.push([i + 1, e.name, e.dept, e.cl_plan, e.cl_actual, e.dl_plan, e.dl_actual, e.at_plan, e.at_actual, e.total_plan, e.total_actual, _emScore(e)]);
-      });
-      _downloadCSV('em_dashboard_' + (data.from || _currMonth()) + '_to_' + (data.to || _today()) + '.csv', rows);
-      _toast('Exported!', 'ok');
-    }
+function _exportEM() {
+  var data = _D.emData;
+  if (!data) { _toast('Load data first — Refresh dabao', 'warn'); return; }
+  var doers = (typeof _emFilteredDoers === 'function') ? _emFilteredDoers() : (data.doers || []);
+  if (!doers.length) { _toast('No doers to export', 'warn'); return; }
+  var rows = [['#', 'Doer', 'Department', 'CL Plan', 'CL Actual', 'DL Plan', 'DL Actual', 'ATT Plan', 'ATT Actual', 'Total Plan', 'Total Actual', 'Score %']];
+  doers.forEach(function (e, i) {
+    var score = (typeof _emScore === 'function') ? _emScore(e) : (e.score || 0);
+    rows.push([
+      i + 1, e.name || '', e.dept || '',
+      e.cl_plan || 0, e.cl_actual || 0,
+      e.dl_plan || 0, e.dl_actual || 0,
+      e.at_plan || 0, e.at_actual || 0,
+      e.total_plan || 0, e.total_actual || 0,
+      score
+    ]);
+  });
+  _downloadCSV('em_dashboard_' + (data.from || '') + '_to_' + (data.to || '') + '.csv', rows);
+  _toast('EM Dashboard exported', 'ok');
+}
 
     /* ══════════════════════════════════════════════════════════════════════
        PAYROLL MODULE — Management only (OWNER / MANAGER)
@@ -14029,7 +14056,7 @@ function _prExportCSV() {
     _prData.summary.total_deductions || 0,
     _prData.summary.total_net || 0
   ]);
-  _downloadCSV(rows, 'salary_summary_' + (_prData.month || _currMonth()) + '.csv');
+  _downloadCSV('salary_summary_' + (_prData.month || _currMonth()) + '.csv', rows);
   _toast('Summary CSV downloaded', 'ok');
 }
 
@@ -14058,7 +14085,7 @@ function _downloadCSV(rows, filename) {
 function _prExportDetailCSV() {
   if (!_prData || !_prData.employees) { _toast('No data to export', 'err'); return; }
   var rows = [
-    ['Emp ID', 'Name', 'Department', 'Date', 'Day', 'Status', 'IN', 'OUT', 'Hours', 'Leave Type', 'OT Hours']
+    ['Emp ID', 'Name', 'Department', 'Date', 'Day', 'Status', 'IN', 'OUT', 'Hours', 'Leave Type', 'Delta Hrs']
   ];
   var dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   _prData.employees.forEach(function (e) {
@@ -14071,32 +14098,23 @@ function _prExportDetailCSV() {
         dow = dayNames[new Date(+p[0], +p[1] - 1, +p[2]).getDay()];
       } catch (err) { }
       rows.push([
-        e.emp_id,
-        e.emp_name,
-        e.dept,
-        dt,
-        dow,
-        d.status || '',
-        d.in || '',
-        d.out || '',
-        d.hours || '',
-        d.leave_type || '',
-        d.ot || 0
+        e.emp_id, e.emp_name, e.dept, dt, dow,
+        d.status || '', d.in || '', d.out || '', d.hours || '',
+        d.leave_type || '', d.ot || 0
       ]);
     });
     rows.push([
-      e.emp_id, e.emp_name, e.dept,
-      '', '',
+      e.emp_id, e.emp_name, e.dept, '', '',
       'NET=' + (e.net_salary || 0),
       'ExtraWO=' + (e.extra_pay || 0),
       'OTPay=' + (e.ot_pay || 0),
-      'UnpaidDays=' + (e.unpaid_days || 0),
+      'UTDed=' + (e.undertime_deduction || 0),
       'WO=' + (e.week_off_taken || 0) + '/' + (e.week_off_entitlement || 0),
-      'OTHrs=' + (e.ot_hours || 0)
+      'NetHrs=' + (e.net_hour_delta || 0)
     ]);
     rows.push([]);
   });
-  _downloadCSV(rows, 'salary_detail_' + (_prData.month || _currMonth()) + '.csv');
+  _downloadCSV('salary_detail_' + (_prData.month || _currMonth()) + '.csv', rows);
   _toast('Detail CSV downloaded', 'ok');
 }
 
@@ -14151,19 +14169,11 @@ function _prDownloadCard(empId) {
       var p = (d.date || '').split('-');
       dow = dayNames[new Date(+p[0], +p[1] - 1, +p[2]).getDay()];
     } catch (err) { }
-    rows.push([
-      d.date || '',
-      dow,
-      d.status || '',
-      d.in || '',
-      d.out || '',
-      d.hours || '',
-      d.ot || 0
-    ]);
+    rows.push([d.date || '', dow, d.status || '', d.in || '', d.out || '', d.hours || '', d.ot || 0]);
   });
 
   var safeName = String(emp.emp_name || 'employee').replace(/[^\w\-]+/g, '_');
-  _downloadCSV(rows, 'salary_card_' + safeName + '_' + month + '.csv');
+  _downloadCSV('salary_card_' + safeName + '_' + month + '.csv', rows);
   _toast('Salary card downloaded', 'ok');
 }
 
