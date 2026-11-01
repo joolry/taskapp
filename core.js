@@ -13813,12 +13813,11 @@ function _prRenderCards(data) {
   }).join('');
 }
 
-
-
-  function _prOpenDetail(empId) {
+function _prOpenDetail(empId) {
   if (!_prData) return;
   var emp = null;
-  (_prData.employees || []).forEach(function (e) { if (e.emp_id === empId) emp = e; });
+  (_prData interns || []).forEach(function (e) { if (e.emp_id === empId) emp = e; });
+  if (!emp) (_prData.employees || []).forEach(function (e) { if (e.emp_id === empId) emp = e; });
   if (!emp) return;
 
   var monthLbl = (function () {
@@ -13841,14 +13840,13 @@ function _prRenderCards(data) {
     kpi('Present', emp.present_days || 0, 'var(--G)', 'fa-circle-check') +
     kpi('Half Day', emp.half_days || 0, 'var(--O)', 'fa-adjust') +
     kpi('Absent', emp.absent_days || 0, (emp.absent_days || 0) > 0 ? 'var(--R)' : 'var(--tx3)', 'fa-circle-xmark') +
-    kpi('WO Taken', (emp.week_off_taken || 0) + '/' + (emp.week_off_entitlement || 0), 'var(--P)', 'fa-calendar-week') +
+    kpi('WO', (emp.week_off_taken || 0) + '/' + (emp.week_off_entitlement || 0), 'var(--P)', 'fa-calendar-week') +
     kpi('WO Extra', emp.week_off_worked || 0, 'var(--G)', 'fa-coins') +
     kpi('PTO', emp.pto_taken || 0, 'var(--T)', 'fa-umbrella-beach') +
-    kpi('OT Hours', emp.ot_hours || 0, '#4F46E5', 'fa-clock') +
-    kpi('Unpaid Days', emp.unpaid_days || emp.lwp_days || 0, (emp.unpaid_days || 0) > 0 ? 'var(--R)' : 'var(--tx3)', 'fa-minus-circle') +
+    kpi('Net Hrs', emp.net_hour_delta || 0, (emp.net_hour_delta || 0) < 0 ? 'var(--R)' : '#4F46E5', 'fa-clock') +
+    kpi('Unpaid', emp.unpaid_days || emp.lwp_days || 0, (emp.unpaid_days || 0) > 0 ? 'var(--R)' : 'var(--tx3)', 'fa-minus-circle') +
     '</div>';
 
-  // Calendar / daily log
   var calHtml = '<div style="margin-bottom:16px"><div style="font-size:12px;font-weight:800;margin-bottom:8px;color:var(--tx2)"><i class="fas fa-calendar-day"></i> Daily Log</div>' +
     '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(44px,1fr));gap:4px">';
   log.forEach(function (d) {
@@ -13858,16 +13856,15 @@ function _prRenderCards(data) {
       (st === 'Weekly Off' || st === 'WO') ? 'var(--sur2)' : st === 'PTO' ? 'var(--Pl)' : 'var(--sur2)';
     var fg = st === 'P' ? 'var(--G)' : st === 'HD' ? 'var(--T)' : st === 'A' ? 'var(--R)' : 'var(--tx2)';
     var dayNum = (d.date || '').slice(8);
-    var tip = (d.date || '') + ' ' + st + (d.in ? ' IN:' + d.in : '') + (d.out ? ' OUT:' + d.out : '') + (d.ot ? ' OT:' + d.ot + 'h' : '');
+    var tip = (d.date || '') + ' ' + st + (d.in ? ' IN:' + d.in : '') + (d.out ? ' OUT:' + d.out : '') + (d.ot ? ' Δ:' + d.ot + 'h' : '');
     calHtml += '<div title="' + _esc(tip) + '" style="background:' + bg + ';color:' + fg + ';border-radius:7px;padding:6px 2px;text-align:center;font-size:10px;font-weight:800">' +
       dayNum + '<div style="font-size:8px;opacity:.85">' + st + '</div></div>';
   });
   calHtml += '</div></div>';
 
-  // Timing table
   var timingHtml = '<div style="max-height:220px;overflow:auto;border:1px solid var(--bdr);border-radius:10px;margin-bottom:16px">' +
     '<table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr style="background:var(--sur2);position:sticky;top:0">' +
-    ['Date', 'Day', 'Status', 'IN', 'OUT', 'Hours', 'OT'].map(function (h) {
+    ['Date', 'Day', 'Status', 'IN', 'OUT', 'Hours', 'Δ Hrs'].map(function (h) {
       return '<th style="padding:7px 8px;text-align:left;font-weight:800;color:var(--tx3)">' + h + '</th>';
     }).join('') + '</tr></thead><tbody>';
   log.forEach(function (d) {
@@ -13884,11 +13881,11 @@ function _prRenderCards(data) {
       '<td style="padding:6px 8px">' + (d.in || '—') + '</td>' +
       '<td style="padding:6px 8px">' + (d.out || '—') + '</td>' +
       '<td style="padding:6px 8px">' + (d.hours || '—') + '</td>' +
-      '<td style="padding:6px 8px;color:#4F46E5;font-weight:700">' + (d.ot ? d.ot + 'h' : '—') + '</td></tr>';
+      '<td style="padding:6px 8px;font-weight:700;color:' + ((d.ot || 0) < 0 ? 'var(--R)' : (d.ot || 0) > 0 ? '#4F46E5' : 'var(--tx3)') + '">' +
+      (d.ot ? ((d.ot > 0 ? '+' : '') + d.ot + 'h') : '—') + '</td></tr>';
   });
   timingHtml += '</tbody></table></div>';
 
-  // Salary breakdown
   function row(lbl, amt, c, bold) {
     return '<tr><td style="padding:7px 12px;font-size:12px;color:' + (bold ? 'var(--tx)' : 'var(--tx2)') +
       ';font-weight:' + (bold ? '800' : '500') + '">' + lbl + '</td>' +
@@ -13897,6 +13894,7 @@ function _prRenderCards(data) {
   }
 
   var hasSalary = (emp.gross_salary || emp.basic_salary) > 0;
+  var totalEarn = (emp.gross_salary || 0) + (emp.extra_pay || 0) + (emp.ot_pay || 0);
   var salaryHtml = !hasSalary
     ? '<div style="padding:20px;text-align:center;color:var(--O)"><i class="fas fa-triangle-exclamation"></i> Salary not configured</div>'
     : '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px">' +
@@ -13916,22 +13914,20 @@ function _prRenderCards(data) {
       row('Daily Rate', emp.daily_rate || emp.per_day_salary) +
       row('Extra Pay (unused Weekly Off × daily)', emp.extra_pay || 0, 'var(--G)') +
       row('OT Pay (' + (emp.ot_hours || 0) + 'h × ₹' + _prFmt(emp.hourly_rate || 0) + ')', emp.ot_pay || 0, '#4F46E5') +
-      row('Total Earnings', (emp.gross_salary || 0) + (emp.extra_pay || 0) + (emp.ot_pay || 0), 'var(--G)', true) +
+      row('Total Earnings', totalEarn, 'var(--G)', true) +
       '</tbody></table>' +
 
       '<table style="width:100%;border-collapse:collapse;margin-bottom:10px;border:1px solid var(--bdr);border-radius:10px;overflow:hidden">' +
       '<thead><tr style="background:var(--sur2)"><th colspan="2" style="padding:8px 12px;text-align:left;font-size:11px;color:var(--tx3)">DEDUCTIONS</th></tr></thead><tbody>' +
-      row('PF', emp.pf_deduction || 0, 'var(--R)') +
-      row('ESI', emp.esi_deduction || 0, 'var(--R)') +
-      row('TDS', emp.tds || 0, 'var(--R)') +
-      row('Other', emp.other_deductions || 0, 'var(--R)') +
-      row('Unpaid / LWP (' + (emp.unpaid_days || emp.lwp_days || 0) + 'd × ₹' + _prFmt(emp.daily_rate || emp.per_day_salary || 0) + ')', emp.lwp_deduction || 0, 'var(--R)') +
+      row('Unpaid / Absent (' + (emp.unpaid_days || emp.lwp_days || 0) + 'd × ₹' + _prFmt(emp.daily_rate || 0) + ')', emp.lwp_deduction || 0, 'var(--R)') +
+      row('Undertime (' + (emp.undertime_hours || 0) + 'h × ₹' + _prFmt(emp.hourly_rate || 0) + ')', emp.undertime_deduction || 0, 'var(--R)') +
       row('Total Deductions', emp.total_deductions || 0, 'var(--R)', true) +
       '</tbody></table>' +
 
       '<div style="background:var(--sur2);border-radius:10px;padding:12px 14px;font-size:11px;color:var(--tx2);line-height:1.6">' +
-      '<strong>Policy:</strong> Salary on fixed 30-day basis. Weekly Off entitlement = Sundays in month (' + (emp.week_off_entitlement || 0) + '). ' +
-      'Unused WO → Extra Pay. Excess WO covered by PTO then Unpaid. OT = hours beyond Office IN–OUT (' + (emp.std_hours || 0) + 'h/day).' +
+      '<strong>Policy:</strong> Fixed 30-day salary. Weekly Off = Sundays in month (' + (emp.week_off_entitlement || 0) + '). ' +
+      'Unused WO → Extra Pay. Excess WO → PTO then Unpaid. ' +
+      'Net hours vs Office IN–OUT (' + (emp.std_hours || 0) + 'h/day): overtime paid, undertime deducted.' +
       '</div>';
 
   var body =
@@ -13962,6 +13958,8 @@ function _prRenderCards(data) {
     }
   }, 40);
 }
+
+
 
     // Tab switcher for salary sheet detail modal
     function _prTab(tab) {
@@ -14104,77 +14102,71 @@ function _prExportDetailCSV() {
 }
 
     // Download individual employee salary card — polished Excel-friendly CSV
-    function _prDownloadCard(empId) {
-      if (!_prData) {_toast('No data loaded', 'err'); return;}
-      var emp = null;
-      (_prData.employees || []).forEach(function (e) {if (e.emp_id === empId) emp = e;});
-      if (!emp) {_toast('Employee not found', 'err'); return;}
-      var month = _prData.month || _currMonth();
-      var log = emp.daily_log || [];
-      var DAY_N = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-      var SHORT_DAY = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-      function q(v) {return '"' + String(v === null || v === undefined ? '' : v).replace(/"/g, '""') + '"';}
-      function row2(a, b) {return q(a) + ',' + q(b);}
-      function blank() {return ',';}
+function _prDownloadCard(empId) {
+  if (!_prData) return;
+  var emp = null;
+  (_prData.employees || []).forEach(function (e) { if (e.emp_id === empId) emp = e; });
+  if (!emp) return;
 
-      var lines = [];
-      // ── Title ──
-      lines.push(q('SALARY CARD') + ',' + q(emp.emp_name));
-      lines.push(q('Employee ID') + ',' + q(emp.emp_id));
-      lines.push(q('Department') + ',' + q(emp.dept));
-      lines.push(q('Month') + ',' + q(month));
-      lines.push('');
+  var month = _prData.month || _currMonth();
+  var dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  var rows = [];
 
-      // ── Attendance Summary ──
-      lines.push(q('ATTENDANCE SUMMARY') + ',');
-      lines.push(row2('Working Days', emp.total_working_days));
-      lines.push(row2('Present (Full Day)', emp.present_days));
-      lines.push(row2('Half Day', log.filter(function (d) {return d.status === 'HD';}).length));
-      lines.push(row2('Paid Leave', emp.leave_days));
-      lines.push(row2('Absent / LWP', emp.absent_days + emp.lwp_days));
-      lines.push(row2('Holidays', emp.holiday_days));
-      lines.push(row2('Week Off', emp.week_off_days));
-      lines.push(row2('Payable Days', emp.payable_days));
-      lines.push('');
+  rows.push(['SALARY CARD', emp.emp_name || '']);
+  rows.push(['Employee ID', emp.emp_id || '']);
+  rows.push(['Department', emp.dept || '']);
+  rows.push(['Month', month]);
+  rows.push([]);
+  rows.push(['ATTENDANCE SUMMARY']);
+  rows.push(['Present (Full+Half)', emp.present_days || 0]);
+  rows.push(['Half Days', emp.half_days || 0]);
+  rows.push(['Absent', emp.absent_days || 0]);
+  rows.push(['Weekly Off Taken', emp.week_off_taken || 0]);
+  rows.push(['Weekly Off Entitlement', emp.week_off_entitlement || 0]);
+  rows.push(['WO Extra Worked', emp.week_off_worked || 0]);
+  rows.push(['PTO Taken', emp.pto_taken || 0]);
+  rows.push(['Unpaid Days', emp.unpaid_days || emp.lwp_days || 0]);
+  rows.push(['Net Hour Delta', emp.net_hour_delta || 0]);
+  rows.push([]);
+  rows.push(['EARNINGS']);
+  rows.push(['Monthly Salary', emp.gross_salary || emp.basic_salary || 0]);
+  rows.push(['Daily Rate', emp.daily_rate || 0]);
+  rows.push(['Extra Pay (unused WO)', emp.extra_pay || 0]);
+  rows.push(['OT Pay', emp.ot_pay || 0]);
+  rows.push(['Total Earnings', (emp.gross_salary || 0) + (emp.extra_pay || 0) + (emp.ot_pay || 0)]);
+  rows.push([]);
+  rows.push(['DEDUCTIONS']);
+  rows.push(['Unpaid / Absent Deduction', emp.lwp_deduction || 0]);
+  rows.push(['Undertime Deduction', emp.undertime_deduction || 0]);
+  rows.push(['Total Deductions', emp.total_deductions || 0]);
+  rows.push([]);
+  rows.push(['NET SALARY PAYABLE', emp.net_salary || 0]);
+  rows.push([]);
+  rows.push(['DAILY ATTENDANCE LOG']);
+  rows.push(['Date', 'Day', 'Status', 'IN', 'OUT', 'Hours', 'Delta Hrs']);
 
-      // ── Earnings ──
-      lines.push(q('EARNINGS') + ',');
-      if (emp.basic_salary) lines.push(row2('Basic Salary', '₹' + _prFmt(emp.basic_salary)));
-      if (emp.hra) lines.push(row2('HRA', '₹' + _prFmt(emp.hra)));
-      if (emp.conveyance) lines.push(row2('Conveyance', '₹' + _prFmt(emp.conveyance)));
-      if (emp.other_allowances) lines.push(row2('Other Allowances', '₹' + _prFmt(emp.other_allowances)));
-      lines.push(row2('GROSS SALARY', '₹' + _prFmt(emp.gross_salary)));
-      lines.push('');
+  (emp.daily_log || []).forEach(function (d) {
+    if (d.status === '—') return;
+    var dow = '';
+    try {
+      var p = (d.date || '').split('-');
+      dow = dayNames[new Date(+p[0], +p[1] - 1, +p[2]).getDay()];
+    } catch (err) { }
+    rows.push([
+      d.date || '',
+      dow,
+      d.status || '',
+      d.in || '',
+      d.out || '',
+      d.hours || '',
+      d.ot || 0
+    ]);
+  });
 
-      // ── Deductions ──
-      lines.push(q('DEDUCTIONS') + ',');
-      if (emp.pf_deduction) lines.push(row2('PF', '₹' + _prFmt(emp.pf_deduction)));
-      if (emp.esi_deduction) lines.push(row2('ESI', '₹' + _prFmt(emp.esi_deduction)));
-      if (emp.tds) lines.push(row2('TDS', '₹' + _prFmt(emp.tds)));
-      if (emp.other_deductions) lines.push(row2('Other', '₹' + _prFmt(emp.other_deductions)));
-      if (emp.lwp_deduction) lines.push(row2('LWP Deduction', '₹' + _prFmt(emp.lwp_deduction)));
-      lines.push(row2('TOTAL DEDUCTIONS', '₹' + _prFmt(emp.total_deductions)));
-      lines.push('');
-      lines.push(row2('NET SALARY PAYABLE', '₹' + _prFmt(emp.net_salary)));
-      lines.push('');
-
-      // ── Daily Log ──
-      lines.push(q('DAILY ATTENDANCE LOG') + ',');
-      lines.push([q('Date'), q('Day'), q('Status'), q('IN'), q('OUT'), q('Hours')].join(','));
-      log.forEach(function (d) {
-        var dow = DAY_N[new Date(d.date + 'T00:00:00').getDay()];
-        var stLabel = d.status === 'P' ? 'Present' : d.status === 'HD' ? 'Half Day' : d.status === 'A' ? 'Absent' : d.status === 'WO' ? 'Week Off' : d.status === 'H' ? 'Holiday' : d.status;
-        lines.push([q(d.date), q(dow), q(stLabel), q(d.in || '—'), q(d.out || '—'), q(d.hours || '—')].join(','));
-      });
-
-      var csv = lines.join('\n');
-      var a = document.createElement('a');
-      a.href = 'data:text/csv;charset=utf-8,\uFEFF' + encodeURIComponent(csv);
-      var safeName = (emp.emp_name || emp.name || emp.emp_id || 'employee').replace(/[^a-zA-Z0-9_\-]/g, '_');
-      a.download = 'salary_card_' + safeName + '_' + month + '.csv';
-      a.click();
-      _toast('Salary card downloaded!', 'ok');
-    }
+  var safeName = String(emp.emp_name || 'employee').replace(/[^\w\-]+/g, '_');
+  _downloadCSV(rows, 'salary_card_' + safeName + '_' + month + '.csv');
+  _toast('Salary card downloaded', 'ok');
+}
 
     /* ══════════════════════════════════════════════════════════════════════
        HOLIDAY CALENDAR MODULE
