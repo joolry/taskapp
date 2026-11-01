@@ -13816,8 +13816,7 @@ function _prRenderCards(data) {
 function _prOpenDetail(empId) {
   if (!_prData) return;
   var emp = null;
-  (_prData interns || []).forEach(function (e) { if (e.emp_id === empId) emp = e; });
-  if (!emp) (_prData.employees || []).forEach(function (e) { if (e.emp_id === empId) emp = e; });
+  (_prData.employees || []).forEach(function (e) { if (e.emp_id === empId) emp = e; });
   if (!emp) return;
 
   var monthLbl = (function () {
