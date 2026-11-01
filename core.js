@@ -13971,23 +13971,22 @@ function _downloadCSV(rows, filename) {
       }
     }
 
+
 function _prExportCSV() {
   if (!_prData || !_prData.employees) { _toast('No data to export', 'err'); return; }
   var rows = [[
     'Emp ID', 'Name', 'Department',
-    'Monthly Salary', 'Daily Rate', 'Std Hours/Day',
+    'Monthly Salary', 'Daily Rate', 'Std Hours',
     'WO Entitlement', 'WO Taken', 'WO Worked', 'Extra Pay (WO)',
-    'OT Hours', 'OT Pay', 'Hourly Rate',
-    'PTO Taken', 'PTO Annual',
-    'Present', 'Half Days', 'Absent', 'Unpaid Days',
-    'Gross', 'PF', 'ESI', 'TDS', 'Other Ded', 'Unpaid Ded', 'Total Ded',
-    'NET PAY'
+    'OT Hours', 'OT Pay',
+    'PTO Taken', 'Present', 'Half Days', 'Absent', 'Unpaid Days',
+    'Gross', 'Unpaid Deduction', 'NET PAY'
   ]];
   _prData.employees.forEach(function (e) {
     rows.push([
       e.emp_id, e.emp_name, e.dept,
       e.gross_salary || e.basic_salary || 0,
-      e.daily_rate || e.per_day_salary || 0,
+      e.daily_rate || 0,
       e.std_hours || 0,
       e.week_off_entitlement || 0,
       e.week_off_taken || 0,
@@ -13995,20 +13994,13 @@ function _prExportCSV() {
       e.extra_pay || 0,
       e.ot_hours || 0,
       e.ot_pay || 0,
-      e.hourly_rate || 0,
       e.pto_taken || 0,
-      e.pto_annual || 0,
       e.present_days || 0,
       e.half_days || 0,
       e.absent_days || 0,
-      e.unpaid_days || e.lwp_days || 0,
+      e.unpaid_days || 0,
       e.gross_salary || 0,
-      e.pf_deduction || 0,
-      e.esi_deduction || 0,
-      e.tds || 0,
-      e.other_deductions || 0,
       e.lwp_deduction || 0,
-      e.total_deductions || 0,
       e.net_salary || 0
     ]);
   });
@@ -14018,15 +14010,15 @@ function _prExportCSV() {
     _prData.employees.reduce(function (s, e) { return s + (e.extra_pay || 0); }, 0),
     _prData.employees.reduce(function (s, e) { return s + (e.ot_hours || 0); }, 0),
     _prData.employees.reduce(function (s, e) { return s + (e.ot_pay || 0); }, 0),
-    '', '', '', '', '', '', '',
-    _prData.summary.total_gross || 0,
     '', '', '', '', '',
+    _prData.summary.total_gross || 0,
     _prData.summary.total_deductions || 0,
     _prData.summary.total_net || 0
   ]);
   _downloadCSV(rows, 'salary_summary_' + (_prData.month || _currMonth()) + '.csv');
   _toast('Summary CSV downloaded', 'ok');
 }
+
 
 function _downloadCSV(rows, filename) {
   var csv = rows.map(function (r) {
