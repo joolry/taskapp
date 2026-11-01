@@ -1630,17 +1630,19 @@
         if (_nA) _nA.style.display = '';
       }
 
-     if (_isManager()) {
-  var mgrNav = document.getElementById('mgrNav');
-  if (mgrNav) mgrNav.style.display = '';
-  
-  // Salary Sheet sirf Owner/Manager ko
-  var nvPay = document.getElementById('nv-payroll');
-  if (nvPay) {
-    nvPay.style.display = _canAccessPayroll() ? '' : 'none';
-  }
-  
-  var tbCache = document.getElementById('tbCacheBtn');
+      if (_isManager()) {
+        var mgrNav = document.getElementById('mgrNav');
+        if (mgrNav) mgrNav.style.display = '';
+
+        // Salary Sheet — only Owner / Manager
+        var nvPay = document.getElementById('nv-payroll');
+        if (nvPay) {
+          nvPay.style.display = (typeof _canAccessPayroll === 'function' && _canAccessPayroll()) ? '' : 'none';
+        }
+
+        // Clear Cache button — Manager + EA
+        var tbCache = document.getElementById('tbCacheBtn');
+        if (tbCache) tbCache.style.display = '';
       }
       if (_dark) {
         var darkIco = document.getElementById('darkIco');
@@ -1994,67 +1996,73 @@
      * Manager/Owner only: clear GAS caches + force Vercel snapshot → Firebase,
      * then clear local caches and reload current view.
      */
-    function _forcePortalCacheClear() {
-      if (!_isManager()) {
-        _toast('Only managers can sync portal cache', 'warn');
-        return;
-      }
-      var btn = document.getElementById('tbCacheBtn');
-      var ico = document.getElementById('tbCacheIco');
-      if (btn && btn.disabled) return;
-      if (btn) {
-        btn.disabled = true;
-        if (ico) ico.className = 'fas fa-spinner fa-spin';
-      }
-      _toast('Clearing cache + updating Firebase…', 'info');
+function _forcePortalCacheClear() {
+  if (!_isManager()) {
+    _toast('Only Manager / EA can clear cache', 'warn');
+    return;
+  }
+  var btn = document.getElementById('tbCacheBtn');
+  var ico = document.getElementById('tbCacheIco');
+  if (btn && btn.disabled) return;
+  if (btn) {
+    btn.disabled = true;
+    if (ico) ico.className = 'fas fa-spinner fa-spin';
+  }
+  _toast('Clearing cache…', 'info');
 
-      // Local browser caches
-      try {
-        delete _D.dashStats; delete _D.todayAtt; delete _D.todayTasks;
-        delete _D.announcements; delete _D.myDelegations; delete _D.myAtt;
-        delete _D.myAttendance; delete _D.lastFetch;
-        delete _D.weekTasks; delete _D._ckWeekKey;
-        delete _D.teamChecklist; delete _D._ckTeamKey;
-        delete _D.histLogs; delete _D._ckHistKey;
-        delete _D._ckTodayKey;
-        window._tsAllTasks = null;
-        if (typeof _teamAttData !== 'undefined') _teamAttData = null;
-        if (typeof _lcClear === 'function') _lcClear();
-        if (typeof _rcClear === 'function') _rcClear(true);
-      } catch (e) { }
+  // 1) Local browser caches
+  try {
+    delete _D.dashStats; delete _D.todayAtt; delete _D.todayTasks;
+    delete _D.announcements; delete _D.myDelegations; delete _D.myAtt;
+    delete _D.myAttendance; delete _D.lastFetch;
+    delete _D.weekTasks; delete _D._ckWeekKey;
+    delete _D.teamChecklist; delete _D._ckTeamKey;
+    delete _D.histLogs; delete _D._ckHistKey;
+    delete _D._ckTodayKey;
+    delete _D.leaveBalance; delete _D.leaveSummary;
+    delete _D.teamAtt; delete _D.empDir;
+    window._tsAllTasks = null;
+    window._prData = null;
+    if (typeof _teamAttData !== 'undefined') _teamAttData = null;
+    if (typeof _lcClear === 'function') _lcClear();
+    if (typeof _rcClear === 'function') _rcClear(true);
+    try { localStorage.removeItem('joolry_lc'); } catch (e0) { }
+    try { sessionStorage.clear(); } catch (e1) { }
+  } catch (e) { }
 
-      _gas('forceRefreshPortalCache', [], function (res) {
-        if (btn) {
-          btn.disabled = false;
-          if (ico) ico.className = 'fas fa-cloud-arrow-down';
-        }
-        if (res && res.firebase_sync) {
-          var msg = '✓ Cache cleared + Firebase updated';
-          if (res.counts) {
-            msg += ' · att ' + (res.counts.attendance || 0) +
-              ', tasks ' + (res.counts.checklistToday || 0);
-          }
-          _toast(msg, 'ok');
-        } else {
-          _toast(
-            'GAS cache cleared; Firebase sync issue: ' +
-            ((res && res.sync_error) || 'check VERCEL_SYNC_URL / SYNC_SECRET'),
-            'warn'
-          );
-        }
-        // Reload current view with fresh data
-        var cur = window._curView || 'dash';
-        setTimeout(function () {
-          if (typeof _loadV === 'function') _loadV(cur);
-        }, 400);
-      }, function (e) {
-        if (btn) {
-          btn.disabled = false;
-          if (ico) ico.className = 'fas fa-cloud-arrow-down';
-        }
-        _toast((e && e.message) || 'Cache refresh failed', 'err');
-      });
+  // 2) GAS clear + Firebase force rebuild
+  _gas('forceRefreshPortalCache', [], function (res) {
+    if (btn) {
+      btn.disabled = false;
+      if (ico) ico.className = 'fas fa-rotate';
     }
+    if (res && res.firebase_sync) {
+      var msg = '✓ Cache cleared';
+      if (res.counts) {
+        msg += ' · att ' + (res.counts.attendance || 0) +
+          ', tasks ' + (res.counts.checklistToday || 0);
+      }
+      _toast(msg, 'ok');
+    } else {
+      _toast(
+        'Local+GAS cleared. Firebase: ' +
+        ((res && res.sync_error) || 'check SYNC_SECRET'),
+        'warn'
+      );
+    }
+    // 3) Reload current view
+    var cur = window._curView || 'dash';
+    setTimeout(function () {
+      if (typeof _loadV === 'function') _loadV(cur);
+    }, 400);
+  }, function (e) {
+    if (btn) {
+      btn.disabled = false;
+      if (ico) ico.className = 'fas fa-rotate';
+    }
+    _toast((e && e.message) || 'Cache clear failed', 'err');
+  });
+}
 
 
     /* ══════════════════════════════════════════════════════════
