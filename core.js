@@ -10450,11 +10450,13 @@ function _vAttAnaBuild() {
     '<option value="pct_desc">Presence % ↓</option><option value="pct_asc">Presence % ↑</option>' +
     '<option value="absent_desc">Absent ↓</option><option value="late_desc">Late ↓</option>' +
     '<option value="name_asc">Name A-Z</option></select>' +
-    '<div style="flex:1;min-width:8px"></div>' +
-    '<button class="btn btn-sm btn-outline" onclick="_exportAttCSV()" style="white-space:nowrap"><i class="fas fa-file-export"></i> Export</button>' +
-    '<button class="btn btn-sm btn-outline" onclick="_exportAttFullDetail()" style="white-space:nowrap"><i class="fas fa-list"></i> Full Detail</button>' +
+'<div style="flex:1;min-width:8px"></div>' +
+'<button class="btn btn-sm btn-outline" onclick="_exportAttCSV()" style="white-space:nowrap"><i class="fas fa-file-export"></i> Export</button>' +
+'<button class="btn btn-sm btn-outline" onclick="_exportAttFullDetail()" style="white-space:nowrap"><i class="fas fa-list"></i> Full Detail</button>' +
+'<button class="btn btn-sm" onclick="_loadAtt()" style="white-space:nowrap"><i class="fas fa-chart-bar"></i> Analyze</button>' +
+'</div>' +
 
-    '<div id="attRoot">' + _skel(4) + '</div>';
+'<div id="attRoot">' + _skel(4) + '</div>';
 
   _loadAtt();
 }
@@ -14066,23 +14068,7 @@ function _prExportCSV() {
 }
 
 
-function _downloadCSV(rows, filename) {
-  var csv = rows.map(function (r) {
-    return r.map(function (c) {
-      var s = String(c == null ? '' : c);
-      if (s.indexOf(',') >= 0 || s.indexOf('"') >= 0 || s.indexOf('\n') >= 0) {
-        return '"' + s.replace(/"/g, '""') + '"';
-      }
-      return s;
-    }).join(',');
-  }).join('\n');
-  var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  var a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = filename;
-  a.click();
-  setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
-}
+
 
 
 
