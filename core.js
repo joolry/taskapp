@@ -13625,24 +13625,59 @@ function _apAppliedForm(apprId) {
 }
 
 function _exportEM() {
-  var data = _D.emData;
-  if (!data) { _toast('Load data first — Refresh dabao', 'warn'); return; }
-  var doers = (typeof _emFilteredDoers === 'function') ? _emFilteredDoers() : (data.doers || []);
-  if (!doers.length) { _toast('No doers to export', 'warn'); return; }
-  var rows = [['#', 'Doer', 'Department', 'CL Plan', 'CL Actual', 'DL Plan', 'DL Actual', 'ATT Plan', 'ATT Actual', 'Total Plan', 'Total Actual', 'Score %']];
-  doers.forEach(function (e, i) {
-    var score = (typeof _emScore === 'function') ? _emScore(e) : (e.score || 0);
-    rows.push([
-      i + 1, e.name || '', e.dept || '',
-      e.cl_plan || 0, e.cl_actual || 0,
-      e.dl_plan || 0, e.dl_actual || 0,
-      e.at_plan || 0, e.at_actual || 0,
-      e.total_plan || 0, e.total_actual || 0,
-      score
-    ]);
-  });
-  _downloadCSV('em_dashboard_' + (data.from || '') + '_to_' + (data.to || '') + '.csv', rows);
-  _toast('EM Dashboard exported', 'ok');
+  try {
+    var data = _D.emData;
+    if (!data) {
+      _toast('Pehle Refresh dabao, phir Export', 'warn');
+      return;
+    }
+    var doers = [];
+    try {
+      if (typeof _emFilteredDoers === 'function') doers = _emFilteredDoers() || [];
+    } catch (e1) { doers = []; }
+    if (!doers.length) doers = data.doers || [];
+    if (!doers.length) {
+      _toast('Export ke liye koi doer nahi', 'warn');
+      return;
+    }
+
+    var rows = [[
+      '#', 'Doer', 'Department',
+      'CL Plan', 'CL Actual', 'DL Plan', 'DL Actual',
+      'ATT Plan', 'ATT Actual', 'Total Plan', 'Total Actual', 'Score %'
+    ]];
+    doers.forEach(function (e, i) {
+      var score = 0;
+      try {
+        score = (typeof _emScore === 'function') ? _emScore(e) : (e.progress != null ? e.progress - 100 : 0);
+      } catch (e2) { score = 0; }
+      rows.push([
+        i + 1,
+        e.name || '',
+        e.dept || '',
+        e.cl_plan || 0,
+        e.cl_actual || 0,
+        e.dl_plan || 0,
+        e.dl_actual || 0,
+        e.at_plan || 0,
+        e.at_actual || 0,
+        e.total_plan || 0,
+        e.total_actual || 0,
+        score
+      ]);
+    });
+
+    var fname = 'em_dashboard_' + (data.from || 'from') + '_to_' + (data.to || 'to') + '.csv';
+    if (typeof _downloadCSV !== 'function') {
+      _toast('_downloadCSV missing — core.js check karo', 'err');
+      return;
+    }
+    _downloadCSV(fname, rows);
+    _toast('EM exported (' + doers.length + ' doers)', 'ok');
+  } catch (err) {
+    console.error('_exportEM', err);
+    _toast('Export failed: ' + (err.message || err), 'err');
+  }
 }
 
 /* ══════════════════════════════════════════════════════════════════════
