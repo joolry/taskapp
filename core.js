@@ -13721,7 +13721,7 @@ function _downloadCSV(rows, filename) {
       });
     }
 
-  function _prRenderCards(data) {
+function _prRenderCards(data) {
   var grid = document.getElementById('prEmpGrid');
   var strip = document.getElementById('prSummaryStrip');
   var info = document.getElementById('prMonthInfo');
@@ -13738,12 +13738,11 @@ function _downloadCSV(rows, filename) {
     '<strong>' + emps.length + ' employees</strong> · ' + data.days_in_month + ' days · ' + _esc(monthLbl);
 
   if (strip) {
-    var noSalary = emps.filter(function (e) { return !e.basic_salary && !e.gross_salary; }).length;
-    var totalExtra = emps.reduce(function (s, e) { return s + (e.extra_pay || 0); }, 0);
-    var totalOt = emps.reduce(function (s, e) { return s + (e.ot_pay || 0); }, 0);
+    var noSalary = emps.filter(function (e) { return !(e.gross_salary || e.basic_salary); }).length;
+    var totalExtra = emps.reduce(function (s, e) { return s + (e.extra_pay || 0) + (e.ot_pay || 0); }, 0);
     var cards = [
       { lbl: 'Total Gross', val: '₹' + _prFmt(summary.total_gross), c: 'var(--P)', ico: 'fa-sack-dollar' },
-      { lbl: 'Extra (WO+OT)', val: '₹' + _prFmt(totalExtra + totalOt), c: 'var(--G)', ico: 'fa-plus-circle' },
+      { lbl: 'Extra (WO+OT)', val: '₹' + _prFmt(totalExtra), c: 'var(--G)', ico: 'fa-plus-circle' },
       { lbl: 'Deductions', val: '₹' + _prFmt(summary.total_deductions), c: 'var(--R)', ico: 'fa-arrow-down-wide-short' },
       { lbl: 'Net Payable', val: '₹' + _prFmt(summary.total_net), c: 'var(--G)', ico: 'fa-wallet', bold: true },
       { lbl: 'Employees', val: emps.length, c: 'var(--T)', ico: 'fa-users' },
@@ -13776,13 +13775,14 @@ function _downloadCSV(rows, filename) {
       tags += '<span class="pr-tag pr-tag-g">+WO ₹' + _prFmt(e.extra_pay) + '</span>';
     if ((e.ot_pay || 0) > 0)
       tags += '<span class="pr-tag pr-tag-b">+OT ₹' + _prFmt(e.ot_pay) + '</span>';
+    if ((e.undertime_deduction || 0) > 0)
+      tags += '<span class="pr-tag pr-tag-r">-UT ₹' + _prFmt(e.undertime_deduction) + '</span>';
 
     return (
       '<div class="pr-card card" data-empid="' + _esc(e.emp_id) + '" ' +
       'onclick="_prOpenDetail(this.getAttribute(\'data-empid\'))">' +
         '<div class="pr-card-bar' + (hasSalary ? '' : ' pr-card-bar-muted') + '"></div>' +
         '<div class="pr-card-body">' +
-          // Header: avatar + name + tags
           '<div class="pr-card-head">' +
             _avatarEl(e.emp_name, e.photo, 40) +
             '<div class="pr-card-id">' +
@@ -13791,16 +13791,14 @@ function _downloadCSV(rows, filename) {
             '</div>' +
           '</div>' +
           (tags ? '<div class="pr-card-tags">' + tags + '</div>' : '') +
-
-          // Stats row
           '<div class="pr-card-stats">' +
             '<div class="pr-stat"><span class="pr-stat-lbl">Present</span><span class="pr-stat-val pr-g">' + (e.present_days || 0) + '</span></div>' +
             '<div class="pr-stat"><span class="pr-stat-lbl">WO</span><span class="pr-stat-val">' + (e.week_off_taken || 0) + '/' + (e.week_off_entitlement || 0) + '</span></div>' +
             '<div class="pr-stat"><span class="pr-stat-lbl">Absent</span><span class="pr-stat-val' + ((e.absent_days || 0) > 0 ? ' pr-r' : '') + '">' + (e.absent_days || 0) + '</span></div>' +
-            '<div class="pr-stat"><span class="pr-stat-lbl">OT Hrs</span><span class="pr-stat-val pr-b">' + (e.ot_hours || 0) + '</span></div>' +
+            '<div class="pr-stat"><span class="pr-stat-lbl">Net Hrs</span><span class="pr-stat-val' +
+              ((e.net_hour_delta || 0) < 0 ? ' pr-r' : (e.net_hour_delta || 0) > 0 ? ' pr-b' : '') + '">' +
+              (e.net_hour_delta || 0) + '</span></div>' +
           '</div>' +
-
-          // Salary footer
           (hasSalary
             ? '<div class="pr-card-pay">' +
                 '<div class="pr-pay-col"><span class="pr-pay-lbl">GROSS</span><span class="pr-pay-val">₹' + _prFmt(e.gross_salary) + '</span></div>' +
@@ -13814,6 +13812,8 @@ function _downloadCSV(rows, filename) {
     );
   }).join('');
 }
+
+
 
   function _prOpenDetail(empId) {
   if (!_prData) return;
@@ -13989,9 +13989,9 @@ function _prExportCSV() {
     'Emp ID', 'Name', 'Department',
     'Monthly Salary', 'Daily Rate', 'Std Hours',
     'WO Entitlement', 'WO Taken', 'WO Worked', 'Extra Pay (WO)',
-    'OT Hours', 'OT Pay',
+    'OT Hours', 'Undertime Hours', 'OT Pay', 'Undertime Ded',
     'PTO Taken', 'Present', 'Half Days', 'Absent', 'Unpaid Days',
-    'Gross', 'Unpaid Deduction', 'NET PAY'
+    'Gross', 'Unpaid Deduction', 'Total Ded', 'NET PAY'
   ]];
   _prData.employees.forEach(function (e) {
     rows.push([
@@ -14004,7 +14004,9 @@ function _prExportCSV() {
       e.week_off_worked || 0,
       e.extra_pay || 0,
       e.ot_hours || 0,
+      e.undertime_hours || 0,
       e.ot_pay || 0,
+      e.undertime_deduction || 0,
       e.pto_taken || 0,
       e.present_days || 0,
       e.half_days || 0,
@@ -14012,6 +14014,7 @@ function _prExportCSV() {
       e.unpaid_days || 0,
       e.gross_salary || 0,
       e.lwp_deduction || 0,
+      e.total_deductions || 0,
       e.net_salary || 0
     ]);
   });
@@ -14020,9 +14023,12 @@ function _prExportCSV() {
     '', 'TOTALS', '', '', '', '', '', '', '',
     _prData.employees.reduce(function (s, e) { return s + (e.extra_pay || 0); }, 0),
     _prData.employees.reduce(function (s, e) { return s + (e.ot_hours || 0); }, 0),
+    _prData.employees.reduce(function (s, e) { return s + (e.undertime_hours || 0); }, 0),
     _prData.employees.reduce(function (s, e) { return s + (e.ot_pay || 0); }, 0),
+    _prData.employees.reduce(function (s, e) { return s + (e.undertime_deduction || 0); }, 0),
     '', '', '', '', '',
     _prData.summary.total_gross || 0,
+    '',
     _prData.summary.total_deductions || 0,
     _prData.summary.total_net || 0
   ]);
