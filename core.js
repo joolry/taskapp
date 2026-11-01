@@ -15678,61 +15678,73 @@ function _updateMobNav(activeKey) {
 
 
 function _exportAttFullDetail() {
-  var data = _D.attData;
-  if (!data) { _toast('Pehle Analyze / Load karo', 'warn'); return; }
-
-  var dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  var rows = [['Emp ID', 'Name', 'Department', 'Date', 'Day', 'Status', 'IN', 'OUT', 'Hours', 'Late']];
-
-  // Prefer detailed daily logs if API sent them
-  var logs = data.daily_logs || data.detail_logs || [];
-  if (logs.length) {
-    logs.forEach(function (r) {
-      var dt = r.date || '';
-      var dow = '';
-      try {
-        var p = String(dt).split('-');
-        dow = dayNames[new Date(+p[0], +p[1] - 1, +p[2]).getDay()];
-      } catch (e) { }
-      rows.push([
-        r.emp_id || '', r.name || r.emp_name || '', r.dept || '',
-        dt, dow, r.status || '',
-        r.in || r.check_in || r.punch_in || '',
-        r.out || r.check_out || r.punch_out || '',
-        r.hours || r.total_hours || '',
-        r.late || r.is_late || ''
-      ]);
-    });
-  } else {
-    // Fallback: employee summary rows
-    (data.by_employee || []).forEach(function (e) {
-      rows.push([
-        e.emp_id || '', e.name || '', e.dept || '',
-        (data.from || '') + ' to ' + (data.to || ''),
-        '', '',
-        '', '', '',
-        ''
-      ]);
-      rows.push([
-        e.emp_id || '', e.name || '', e.dept || '',
-        'SUMMARY',
-        '',
-        'P=' + (e.present || 0) + ' HD=' + (e.half_day || 0) + ' A=' + (e.absent || 0),
-        'WO=' + (e.week_off || 0),
-        'Late=' + (e.late || 0),
-        'Presence=' + (e.presence_pct || 0) + '%',
-        'AvgHrs=' + (e.avg_hours || 0)
-      ]);
-      rows.push([]);
-    });
+  if (typeof _canAccessPayroll === 'function' && !_canAccessPayroll() && !_isManager()) {
+    _toast('Manager access required', 'warn');
+    return;
   }
 
-  if (rows.length <= 1) { _toast('No attendance rows to export', 'err'); return; }
-  _downloadCSV(
-    'attendance_full_detail_' + (data.from || '') + '_to_' + (data.to || '') + '.csv',
-    rows
-  );
-  _toast('Attendance full detail exported', 'ok');
+  // Month from Attendance filters (from date → YYYY-MM)
+  var from = (document.getElementById('attFrom') || {}).value || '';
+  var to = (document.getElementById('attTo') || {}).value || '';
+  var dept = (document.getElementById('attDept') || {}).value || 'all';
+  var month = (from && from.length >= 7) ? from.substring(0, 7) : _currMonth();
+
+  _toast('Building attendance detail…', 'info');
+
+  _gas('getPayrollSummary', [month, dept === 'all' ? null : dept], function (data) {
+    if (!data || !data.employees || !data.employees.length) {
+      _toast('No attendance data for ' + month, 'err');
+      return;
+    }
+
+    var dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    var rows = [[
+      'Emp ID', 'Name', 'Department', 'Date', 'Day', 'Status', 'IN', 'OUT', 'Hours', 'Leave Type'
+    ]];
+
+    data.employees.forEach(function (e) {
+      (e.daily_log || []).forEach(function (d) {
+        if (d.status === '—') return;
+        // Optional: filter by attFrom / attTo if set
+        if (from && d.date && d.date < from) return;
+        if (to && d.date && d.date > to) return;
+
+        var dow = '';
+        try {
+          var p = String(d.date || '').split('-');
+          dow = dayNames[new Date(+p[0], +p[1] - 1, +p[2]).getDay()];
+        } catch (err) { }
+
+        rows.push([
+          e.emp_id || '',
+          e.emp_name || '',
+          e.dept || '',
+          d.date || '',
+          dow,
+          d.status || '',
+          d.in || '',
+          d.out || '',
+          d.hours || '',
+          d.leave_type || ''
+        ]);
+      });
+      // blank line between employees (no salary NET row)
+      rows.push([]);
+    });
+
+    if (rows.length <= 1) {
+      _toast('No daily rows to export', 'err');
+      return;
+    }
+
+    _downloadCSV(
+      'attendance_full_detail_' + month + '.csv',
+      rows
+    );
+    _toast('Attendance full detail exported', 'ok');
+  }, function (err) {
+    _toast((err && err.message) || 'Failed to load attendance detail', 'err');
+  });
 }
 
 
