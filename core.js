@@ -13768,39 +13768,50 @@ function _downloadCSV(rows, filename) {
   grid.innerHTML = emps.map(function (e) {
     var hasSalary = (e.gross_salary || e.basic_salary) > 0;
     var unpaid = e.unpaid_days || e.lwp_days || 0;
+
     var tags = '';
-    if (unpaid > 0) tags += '<span style="background:var(--Rl);color:var(--R);padding:1px 6px;border-radius:5px;font-size:9px;font-weight:800">Unpaid:' + unpaid + 'd</span> ';
-    if ((e.extra_pay || 0) > 0) tags += '<span style="background:var(--Gl);color:var(--G);padding:1px 6px;border-radius:5px;font-size:9px;font-weight:800">+WO ₹' + _prFmt(e.extra_pay) + '</span> ';
-    if ((e.ot_pay || 0) > 0) tags += '<span style="background:#EEF2FF;color:#4F46E5;padding:1px 6px;border-radius:5px;font-size:9px;font-weight:800">+OT ₹' + _prFmt(e.ot_pay) + '</span>';
+    if (unpaid > 0)
+      tags += '<span class="pr-tag pr-tag-r">Unpaid:' + unpaid + 'd</span>';
+    if ((e.extra_pay || 0) > 0)
+      tags += '<span class="pr-tag pr-tag-g">+WO ₹' + _prFmt(e.extra_pay) + '</span>';
+    if ((e.ot_pay || 0) > 0)
+      tags += '<span class="pr-tag pr-tag-b">+OT ₹' + _prFmt(e.ot_pay) + '</span>';
 
-    return '<div class="card" style="padding:0;overflow:hidden;cursor:pointer" ' +
-      'data-empid="' + _esc(e.emp_id) + '" onclick="_prOpenDetail(this.getAttribute(\'data-empid\'))">' +
-      '<div style="height:5px;background:' + (hasSalary ? 'linear-gradient(90deg,var(--P),var(--T))' : 'var(--bdr)') + '"></div>' +
-      '<div style="padding:14px 16px">' +
-      '<div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">' +
-      _avatarEl(e.emp_name, e.photo, 42) +
-      '<div style="flex:1;min-width:0">' +
-      '<div style="font-weight:800;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + _esc(e.emp_name) + '</div>' +
-      '<div style="font-size:11px;color:var(--tx3)">' + _esc(e.dept) + ' · ' + _esc(e.emp_id) + '</div></div>' +
-      '<div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end">' + tags + '</div></div>' +
+    return (
+      '<div class="pr-card card" data-empid="' + _esc(e.emp_id) + '" ' +
+      'onclick="_prOpenDetail(this.getAttribute(\'data-empid\'))">' +
+        '<div class="pr-card-bar' + (hasSalary ? '' : ' pr-card-bar-muted') + '"></div>' +
+        '<div class="pr-card-body">' +
+          // Header: avatar + name + tags
+          '<div class="pr-card-head">' +
+            _avatarEl(e.emp_name, e.photo, 40) +
+            '<div class="pr-card-id">' +
+              '<div class="pr-card-name">' + _esc(e.emp_name) + '</div>' +
+              '<div class="pr-card-meta">' + _esc(e.dept) + ' · ' + _esc(e.emp_id) + '</div>' +
+            '</div>' +
+          '</div>' +
+          (tags ? '<div class="pr-card-tags">' + tags + '</div>' : '') +
 
-      '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px;font-size:10px;text-align:center">' +
-      '<div style="background:var(--sur2);border-radius:7px;padding:6px"><div style="color:var(--tx3);font-weight:700">Present</div><div style="font-weight:900;color:var(--G)">' + (e.present_days || 0) + '</div></div>' +
-      '<div style="background:var(--sur2);border-radius:7px;padding:6px"><div style="color:var(--tx3);font-weight:700">WO</div><div style="font-weight:900">' + (e.week_off_taken || 0) + '/' + (e.week_off_entitlement || 0) + '</div></div>' +
-      '<div style="background:var(--sur2);border-radius:7px;padding:6px"><div style="color:var(--tx3);font-weight:700">Absent</div><div style="font-weight:900;color:' + ((e.absent_days || 0) > 0 ? 'var(--R)' : 'var(--tx)') + '">' + (e.absent_days || 0) + '</div></div>' +
-      '<div style="background:var(--sur2);border-radius:7px;padding:6px"><div style="color:var(--tx3);font-weight:700">OT Hrs</div><div style="font-weight:900;color:#4F46E5">' + (e.ot_hours || 0) + '</div></div>' +
-      '</div>' +
+          // Stats row
+          '<div class="pr-card-stats">' +
+            '<div class="pr-stat"><span class="pr-stat-lbl">Present</span><span class="pr-stat-val pr-g">' + (e.present_days || 0) + '</span></div>' +
+            '<div class="pr-stat"><span class="pr-stat-lbl">WO</span><span class="pr-stat-val">' + (e.week_off_taken || 0) + '/' + (e.week_off_entitlement || 0) + '</span></div>' +
+            '<div class="pr-stat"><span class="pr-stat-lbl">Absent</span><span class="pr-stat-val' + ((e.absent_days || 0) > 0 ? ' pr-r' : '') + '">' + (e.absent_days || 0) + '</span></div>' +
+            '<div class="pr-stat"><span class="pr-stat-lbl">OT Hrs</span><span class="pr-stat-val pr-b">' + (e.ot_hours || 0) + '</span></div>' +
+          '</div>' +
 
-      (hasSalary
-        ? '<div style="background:var(--sur2);border-radius:8px;padding:10px 12px;display:flex;justify-content:space-between;align-items:center">' +
-          '<div><div style="font-size:10px;color:var(--tx3);font-weight:700">GROSS</div>' +
-          '<div style="font-size:13px;font-weight:800">₹' + _prFmt(e.gross_salary) + '</div></div>' +
-          '<div style="font-size:12px;color:var(--R)">-₹' + _prFmt(e.total_deductions) + '</div>' +
-          '<div style="text-align:right"><div style="font-size:10px;color:var(--tx3);font-weight:700">NET PAY</div>' +
-          '<div style="font-size:16px;font-weight:900;color:var(--G)">₹' + _prFmt(e.net_salary) + '</div></div></div>'
-        : '<div style="background:var(--Ol);border-radius:8px;padding:8px 12px;font-size:12px;color:var(--O);font-weight:700">' +
-          '<i class="fas fa-triangle-exclamation"></i> Salary not set in Doer List</div>') +
-      '</div></div>';
+          // Salary footer
+          (hasSalary
+            ? '<div class="pr-card-pay">' +
+                '<div class="pr-pay-col"><span class="pr-pay-lbl">GROSS</span><span class="pr-pay-val">₹' + _prFmt(e.gross_salary) + '</span></div>' +
+                '<div class="pr-pay-ded">-₹' + _prFmt(e.total_deductions) + '</div>' +
+                '<div class="pr-pay-col pr-pay-net"><span class="pr-pay-lbl">NET PAY</span><span class="pr-pay-val pr-g">₹' + _prFmt(e.net_salary) + '</span></div>' +
+              '</div>'
+            : '<div class="pr-card-nosal"><i class="fas fa-triangle-exclamation"></i> Salary not set in Doer List</div>'
+          ) +
+        '</div>' +
+      '</div>'
+    );
   }).join('');
 }
 
