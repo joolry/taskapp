@@ -13721,360 +13721,236 @@ function _downloadCSV(rows, filename) {
       });
     }
 
-    function _prRenderCards(data) {
-      var grid = document.getElementById('prEmpGrid');
-      var strip = document.getElementById('prSummaryStrip');
-      var info = document.getElementById('prMonthInfo');
-      if (!grid) return;
+  function _prRenderCards(data) {
+  var grid = document.getElementById('prEmpGrid');
+  var strip = document.getElementById('prSummaryStrip');
+  var info = document.getElementById('prMonthInfo');
+  if (!grid) return;
 
-      var emps = data.employees || [];
-      var summary = data.summary || {};
-      var monthLbl = (function () {
-        try {var p = data.month.split('-'); return new Date(+p[0], +p[1] - 1, 1).toLocaleString('en-IN', {month: 'long', year: 'numeric'});}
-        catch (e2) {return data.month;}
-      })();
+  var emps = data.employees || [];
+  var summary = data.summary || {};
+  var monthLbl = (function () {
+    try { var p = data.month.split('-'); return new Date(+p[0], +p[1] - 1, 1).toLocaleString('en-IN', { month: 'long', year: 'numeric' }); }
+    catch (e2) { return data.month; }
+  })();
 
-      if (info) info.innerHTML =
-        '<strong>' + emps.length + ' employees</strong> · ' + data.days_in_month + ' days · ' + _esc(monthLbl);
+  if (info) info.innerHTML =
+    '<strong>' + emps.length + ' employees</strong> · ' + data.days_in_month + ' days · ' + _esc(monthLbl);
 
-      // Summary strip
-      if (strip) {
-        var noSalary = emps.filter(function (e) {return e.basic_salary === 0;}).length; var cards = [
-          {lbl: 'Total Gross', val: '₹' + _prFmt(summary.total_gross), c: 'var(--P)', ico: 'fa-sack-dollar'},
-          {lbl: 'Deductions', val: '₹' + _prFmt(summary.total_deductions), c: 'var(--R)', ico: 'fa-arrow-down-wide-short'},
-          {lbl: 'Net Payable', val: '₹' + _prFmt(summary.total_net), c: 'var(--G)', ico: 'fa-wallet', bold: true},
-          {lbl: 'Employees', val: emps.length, c: 'var(--T)', ico: 'fa-users'},
-          {lbl: 'Salary Missing', val: noSalary, c: noSalary > 0 ? 'var(--O)' : 'var(--tx3)', ico: 'fa-triangle-exclamation'}
-        ];
-        strip.innerHTML = cards.map(function (c) {
-          return '<div class="card card-nohover" style="padding:12px 14px;border-left:3px solid ' + c.c + '">' +
-            '<div style="display:flex;align-items:center;gap:7px;margin-bottom:3px">' +
-            '<i class="fas ' + c.ico + '" style="color:' + c.c + ';font-size:13px"></i>' +
-            '<div style="font-size:10px;font-weight:800;color:var(--tx3);text-transform:uppercase">' + c.lbl + '</div></div>' +
-            '<div style="font-size:' + (c.bold ? '17' : '14') + 'px;font-weight:900;color:' + c.c + '">' + c.val + '</div>' +
-            '</div>';
-        }).join('');
-      }
+  if (strip) {
+    var noSalary = emps.filter(function (e) { return !e.basic_salary && !e.gross_salary; }).length;
+    var totalExtra = emps.reduce(function (s, e) { return s + (e.extra_pay || 0); }, 0);
+    var totalOt = emps.reduce(function (s, e) { return s + (e.ot_pay || 0); }, 0);
+    var cards = [
+      { lbl: 'Total Gross', val: '₹' + _prFmt(summary.total_gross), c: 'var(--P)', ico: 'fa-sack-dollar' },
+      { lbl: 'Extra (WO+OT)', val: '₹' + _prFmt(totalExtra + totalOt), c: 'var(--G)', ico: 'fa-plus-circle' },
+      { lbl: 'Deductions', val: '₹' + _prFmt(summary.total_deductions), c: 'var(--R)', ico: 'fa-arrow-down-wide-short' },
+      { lbl: 'Net Payable', val: '₹' + _prFmt(summary.total_net), c: 'var(--G)', ico: 'fa-wallet', bold: true },
+      { lbl: 'Employees', val: emps.length, c: 'var(--T)', ico: 'fa-users' },
+      { lbl: 'Salary Missing', val: noSalary, c: noSalary > 0 ? 'var(--O)' : 'var(--tx3)', ico: 'fa-triangle-exclamation' }
+    ];
+    strip.innerHTML = cards.map(function (c) {
+      return '<div class="card card-nohover" style="padding:12px 14px;border-left:3px solid ' + c.c + '">' +
+        '<div style="display:flex;align-items:center;gap:7px;margin-bottom:3px">' +
+        '<i class="fas ' + c.ico + '" style="color:' + c.c + ';font-size:13px"></i>' +
+        '<div style="font-size:10px;font-weight:800;color:var(--tx3);text-transform:uppercase">' + c.lbl + '</div></div>' +
+        '<div style="font-size:' + (c.bold ? '17' : '14') + 'px;font-weight:900;color:' + c.c + '">' + c.val + '</div></div>';
+    }).join('');
+  }
 
-      if (!emps.length) {
-        grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1">' +
-          '<i class="fas fa-users-slash" style="font-size:40px;color:var(--tx4)"></i>' +
-          '<h4 style="margin-top:12px">No Employees Found</h4>' +
-          '<p>Selected department/month mein koi employee nahi hai ya NeedAttendance=No set hai.</p></div>';
-        return;
-      }
+  if (!emps.length) {
+    grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1">' +
+      '<i class="fas fa-users-slash" style="font-size:40px;color:var(--tx4)"></i>' +
+      '<h4 style="margin-top:12px">No Employees Found</h4></div>';
+    return;
+  }
 
-      // Employee cards — Employee Directory style
-      grid.innerHTML = emps.map(function (e) {
-        var hasSalary = e.basic_salary > 0;
-        var attPct = e.total_working_days > 0
-          ? Math.round(e.payable_days / e.total_working_days * 100) : 0;
-        var pctColor = attPct >= 90 ? 'var(--G)' : attPct >= 75 ? 'var(--O)' : 'var(--R)';
-        var lwpTag = e.lwp_days > 0
-          ? '<span style="background:var(--Rl);color:var(--R);padding:1px 6px;border-radius:5px;font-size:9px;font-weight:800">LWP:' + e.lwp_days + 'd</span>' : '';
+  grid.innerHTML = emps.map(function (e) {
+    var hasSalary = (e.gross_salary || e.basic_salary) > 0;
+    var unpaid = e.unpaid_days || e.lwp_days || 0;
+    var tags = '';
+    if (unpaid > 0) tags += '<span style="background:var(--Rl);color:var(--R);padding:1px 6px;border-radius:5px;font-size:9px;font-weight:800">Unpaid:' + unpaid + 'd</span> ';
+    if ((e.extra_pay || 0) > 0) tags += '<span style="background:var(--Gl);color:var(--G);padding:1px 6px;border-radius:5px;font-size:9px;font-weight:800">+WO ₹' + _prFmt(e.extra_pay) + '</span> ';
+    if ((e.ot_pay || 0) > 0) tags += '<span style="background:#EEF2FF;color:#4F46E5;padding:1px 6px;border-radius:5px;font-size:9px;font-weight:800">+OT ₹' + _prFmt(e.ot_pay) + '</span>';
 
-        return '<div class="card" style="padding:0;overflow:hidden;cursor:pointer;transition:transform .15s,box-shadow .15s" ' +
-          'data-empid="' + _esc(e.emp_id) + '" ' +
-          'onclick="_prOpenDetail(this.getAttribute(\'data-empid\'))" ' +
-          'onmouseenter="this.style.transform=\'translateY(-2px)\';this.style.boxShadow=\'0 8px 24px rgba(0,0,0,.12)\'" ' +
-          'onmouseleave="this.style.transform=\'\';this.style.boxShadow=\'\'">' +
+    return '<div class="card" style="padding:0;overflow:hidden;cursor:pointer" ' +
+      'data-empid="' + _esc(e.emp_id) + '" onclick="_prOpenDetail(this.getAttribute(\'data-empid\'))">' +
+      '<div style="height:5px;background:' + (hasSalary ? 'linear-gradient(90deg,var(--P),var(--T))' : 'var(--bdr)') + '"></div>' +
+      '<div style="padding:14px 16px">' +
+      '<div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">' +
+      _avatarEl(e.emp_name, e.photo, 42) +
+      '<div style="flex:1;min-width:0">' +
+      '<div style="font-weight:800;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + _esc(e.emp_name) + '</div>' +
+      '<div style="font-size:11px;color:var(--tx3)">' + _esc(e.dept) + ' · ' + _esc(e.emp_id) + '</div></div>' +
+      '<div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end">' + tags + '</div></div>' +
 
-          // Card top band
-          '<div style="height:5px;background:' + (hasSalary ? 'linear-gradient(90deg,var(--P),var(--T))' : 'var(--bdr)') + '"></div>' +
+      '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px;font-size:10px;text-align:center">' +
+      '<div style="background:var(--sur2);border-radius:7px;padding:6px"><div style="color:var(--tx3);font-weight:700">Present</div><div style="font-weight:900;color:var(--G)">' + (e.present_days || 0) + '</div></div>' +
+      '<div style="background:var(--sur2);border-radius:7px;padding:6px"><div style="color:var(--tx3);font-weight:700">WO</div><div style="font-weight:900">' + (e.week_off_taken || 0) + '/' + (e.week_off_entitlement || 0) + '</div></div>' +
+      '<div style="background:var(--sur2);border-radius:7px;padding:6px"><div style="color:var(--tx3);font-weight:700">Absent</div><div style="font-weight:900;color:' + ((e.absent_days || 0) > 0 ? 'var(--R)' : 'var(--tx)') + '">' + (e.absent_days || 0) + '</div></div>' +
+      '<div style="background:var(--sur2);border-radius:7px;padding:6px"><div style="color:var(--tx3);font-weight:700">OT Hrs</div><div style="font-weight:900;color:#4F46E5">' + (e.ot_hours || 0) + '</div></div>' +
+      '</div>' +
 
-          '<div style="padding:14px 16px">' +
-          // Avatar + name
-          '<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">' +
-          _avatarEl(e.emp_name, e.photo, 42) +
-          '<div style="flex:1;min-width:0">' +
-          '<div style="font-weight:800;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + _esc(e.emp_name) + '</div>' +
-          '<div style="font-size:11px;color:var(--tx3)">' + _esc(e.dept) + ' · ' + _esc(e.emp_id) + '</div>' +
-          '</div>' +
-          lwpTag +
-          '</div>' +
+      (hasSalary
+        ? '<div style="background:var(--sur2);border-radius:8px;padding:10px 12px;display:flex;justify-content:space-between;align-items:center">' +
+          '<div><div style="font-size:10px;color:var(--tx3);font-weight:700">GROSS</div>' +
+          '<div style="font-size:13px;font-weight:800">₹' + _prFmt(e.gross_salary) + '</div></div>' +
+          '<div style="font-size:12px;color:var(--R)">-₹' + _prFmt(e.total_deductions) + '</div>' +
+          '<div style="text-align:right"><div style="font-size:10px;color:var(--tx3);font-weight:700">NET PAY</div>' +
+          '<div style="font-size:16px;font-weight:900;color:var(--G)">₹' + _prFmt(e.net_salary) + '</div></div></div>'
+        : '<div style="background:var(--Ol);border-radius:8px;padding:8px 12px;font-size:12px;color:var(--O);font-weight:700">' +
+          '<i class="fas fa-triangle-exclamation"></i> Salary not set in Doer List</div>') +
+      '</div></div>';
+  }).join('');
+}
 
-          // Attendance bar
-          '<div style="margin-bottom:10px">' +
-          '<div style="display:flex;justify-content:space-between;font-size:10px;color:var(--tx3);margin-bottom:3px">' +
-          '<span>Attendance</span><span style="font-weight:800;color:' + pctColor + '">' + attPct + '%</span></div>' +
-          '<div style="height:5px;background:var(--sur2);border-radius:4px;overflow:hidden">' +
-          '<div style="height:100%;width:' + attPct + '%;background:' + pctColor + ';border-radius:4px;transition:width .4s"></div></div>' +
-          '<div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap">' +
-          '<span style="font-size:10px;color:var(--G)">✓ ' + e.payable_days + 'd paid</span>' +
-          (e.absent_days > 0 ? '<span style="font-size:10px;color:var(--R)">✗ ' + e.absent_days + 'd absent</span>' : '') +
-          (e.leave_days > 0 ? '<span style="font-size:10px;color:var(--T)">⊘ ' + e.leave_days + 'd leave</span>' : '') +
-          '</div></div>' +
+  function _prOpenDetail(empId) {
+  if (!_prData) return;
+  var emp = null;
+  (_prData.employees || []).forEach(function (e) { if (e.emp_id === empId) emp = e; });
+  if (!emp) return;
 
-          // Salary summary
-          (hasSalary
-            ? '<div style="background:var(--sur2);border-radius:8px;padding:10px 12px;display:flex;justify-content:space-between;align-items:center">' +
-            '<div>' +
-            '<div style="font-size:10px;color:var(--tx3);text-transform:uppercase;font-weight:700">Gross</div>' +
-            '<div style="font-size:13px;font-weight:800;color:var(--tx)">₹' + _prFmt(e.gross_salary) + '</div>' +
-            '</div>' +
-            '<div style="font-size:12px;color:var(--R)">-₹' + _prFmt(e.total_deductions) + '</div>' +
-            '<div style="text-align:right">' +
-            '<div style="font-size:10px;color:var(--tx3);text-transform:uppercase;font-weight:700">Net Pay</div>' +
-            '<div style="font-size:16px;font-weight:900;color:var(--G)">₹' + _prFmt(e.net_salary) + '</div>' +
-            '</div>' +
-            '</div>'
-            : '<div style="background:var(--Ol);border-radius:8px;padding:8px 12px;font-size:12px;color:var(--O);font-weight:700">' +
-            '<i class="fas fa-triangle-exclamation"></i> Salary not configured in Doer List</div>'
-          ) +
-          '</div></div>';
-      }).join('');
+  var monthLbl = (function () {
+    try { var p = _prData.month.split('-'); return new Date(+p[0], +p[1] - 1, 1).toLocaleString('en-IN', { month: 'long', year: 'numeric' }); }
+    catch (e2) { return _prData.month; }
+  })();
+
+  var log = emp.daily_log || [];
+  var dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+  function kpi(lbl, val, c, ico) {
+    return '<div style="background:var(--sur2);border-radius:10px;padding:10px 12px;text-align:center;border:1px solid var(--bdr)">' +
+      '<i class="fas ' + ico + '" style="color:' + c + ';font-size:13px;margin-bottom:4px;display:block"></i>' +
+      '<div style="font-size:16px;font-weight:900;color:' + c + ';line-height:1.1">' + val + '</div>' +
+      '<div style="font-size:9px;color:var(--tx3);text-transform:uppercase;font-weight:800;margin-top:3px">' + lbl + '</div></div>';
+  }
+
+  var headerHtml =
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:8px;margin-bottom:16px">' +
+    kpi('Present', emp.present_days || 0, 'var(--G)', 'fa-circle-check') +
+    kpi('Half Day', emp.half_days || 0, 'var(--O)', 'fa-adjust') +
+    kpi('Absent', emp.absent_days || 0, (emp.absent_days || 0) > 0 ? 'var(--R)' : 'var(--tx3)', 'fa-circle-xmark') +
+    kpi('WO Taken', (emp.week_off_taken || 0) + '/' + (emp.week_off_entitlement || 0), 'var(--P)', 'fa-calendar-week') +
+    kpi('WO Extra', emp.week_off_worked || 0, 'var(--G)', 'fa-coins') +
+    kpi('PTO', emp.pto_taken || 0, 'var(--T)', 'fa-umbrella-beach') +
+    kpi('OT Hours', emp.ot_hours || 0, '#4F46E5', 'fa-clock') +
+    kpi('Unpaid Days', emp.unpaid_days || emp.lwp_days || 0, (emp.unpaid_days || 0) > 0 ? 'var(--R)' : 'var(--tx3)', 'fa-minus-circle') +
+    '</div>';
+
+  // Calendar / daily log
+  var calHtml = '<div style="margin-bottom:16px"><div style="font-size:12px;font-weight:800;margin-bottom:8px;color:var(--tx2)"><i class="fas fa-calendar-day"></i> Daily Log</div>' +
+    '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(44px,1fr));gap:4px">';
+  log.forEach(function (d) {
+    if (d.status === '—') return;
+    var st = d.status || 'A';
+    var bg = st === 'P' ? 'var(--Gl)' : st === 'HD' ? 'var(--Tl)' : st === 'A' ? 'var(--Rl)' :
+      (st === 'Weekly Off' || st === 'WO') ? 'var(--sur2)' : st === 'PTO' ? 'var(--Pl)' : 'var(--sur2)';
+    var fg = st === 'P' ? 'var(--G)' : st === 'HD' ? 'var(--T)' : st === 'A' ? 'var(--R)' : 'var(--tx2)';
+    var dayNum = (d.date || '').slice(8);
+    var tip = (d.date || '') + ' ' + st + (d.in ? ' IN:' + d.in : '') + (d.out ? ' OUT:' + d.out : '') + (d.ot ? ' OT:' + d.ot + 'h' : '');
+    calHtml += '<div title="' + _esc(tip) + '" style="background:' + bg + ';color:' + fg + ';border-radius:7px;padding:6px 2px;text-align:center;font-size:10px;font-weight:800">' +
+      dayNum + '<div style="font-size:8px;opacity:.85">' + st + '</div></div>';
+  });
+  calHtml += '</div></div>';
+
+  // Timing table
+  var timingHtml = '<div style="max-height:220px;overflow:auto;border:1px solid var(--bdr);border-radius:10px;margin-bottom:16px">' +
+    '<table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr style="background:var(--sur2);position:sticky;top:0">' +
+    ['Date', 'Day', 'Status', 'IN', 'OUT', 'Hours', 'OT'].map(function (h) {
+      return '<th style="padding:7px 8px;text-align:left;font-weight:800;color:var(--tx3)">' + h + '</th>';
+    }).join('') + '</tr></thead><tbody>';
+  log.forEach(function (d) {
+    if (d.status === '—') return;
+    var dow = '';
+    try {
+      var p = (d.date || '').split('-');
+      dow = dayNames[new Date(+p[0], +p[1] - 1, +p[2]).getDay()];
+    } catch (err) { }
+    timingHtml += '<tr style="border-top:1px solid var(--bdr)">' +
+      '<td style="padding:6px 8px">' + (d.date || '') + '</td>' +
+      '<td style="padding:6px 8px">' + dow + '</td>' +
+      '<td style="padding:6px 8px;font-weight:700">' + (d.status || '') + '</td>' +
+      '<td style="padding:6px 8px">' + (d.in || '—') + '</td>' +
+      '<td style="padding:6px 8px">' + (d.out || '—') + '</td>' +
+      '<td style="padding:6px 8px">' + (d.hours || '—') + '</td>' +
+      '<td style="padding:6px 8px;color:#4F46E5;font-weight:700">' + (d.ot ? d.ot + 'h' : '—') + '</td></tr>';
+  });
+  timingHtml += '</tbody></table></div>';
+
+  // Salary breakdown
+  function row(lbl, amt, c, bold) {
+    return '<tr><td style="padding:7px 12px;font-size:12px;color:' + (bold ? 'var(--tx)' : 'var(--tx2)') +
+      ';font-weight:' + (bold ? '800' : '500') + '">' + lbl + '</td>' +
+      '<td style="padding:7px 12px;font-size:12px;font-weight:' + (bold ? '900' : '600') +
+      ';text-align:right;color:' + (c || 'var(--tx)') + '">₹' + _prFmt(amt) + '</td></tr>';
+  }
+
+  var hasSalary = (emp.gross_salary || emp.basic_salary) > 0;
+  var salaryHtml = !hasSalary
+    ? '<div style="padding:20px;text-align:center;color:var(--O)"><i class="fas fa-triangle-exclamation"></i> Salary not configured</div>'
+    : '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px">' +
+      '<div style="background:var(--Gl);border-radius:8px;padding:10px;text-align:center">' +
+      '<div style="font-size:9px;font-weight:800;color:var(--G)">GROSS</div>' +
+      '<div style="font-size:16px;font-weight:900;color:var(--G)">₹' + _prFmt(emp.gross_salary) + '</div></div>' +
+      '<div style="background:var(--Rl);border-radius:8px;padding:10px;text-align:center">' +
+      '<div style="font-size:9px;font-weight:800;color:var(--R)">DEDUCTIONS</div>' +
+      '<div style="font-size:16px;font-weight:900;color:var(--R)">₹' + _prFmt(emp.total_deductions) + '</div></div>' +
+      '<div style="background:linear-gradient(135deg,#0F766E,#14B8A6);border-radius:8px;padding:10px;text-align:center">' +
+      '<div style="font-size:9px;font-weight:800;color:#fff;opacity:.9">NET PAY</div>' +
+      '<div style="font-size:16px;font-weight:900;color:#fff">₹' + _prFmt(emp.net_salary) + '</div></div></div>' +
+
+      '<table style="width:100%;border-collapse:collapse;margin-bottom:10px;border:1px solid var(--bdr);border-radius:10px;overflow:hidden">' +
+      '<thead><tr style="background:var(--sur2)"><th colspan="2" style="padding:8px 12px;text-align:left;font-size:11px;color:var(--tx3)">EARNINGS</th></tr></thead><tbody>' +
+      row('Monthly Salary (30-day basis)', emp.gross_salary || emp.basic_salary) +
+      row('Daily Rate', emp.daily_rate || emp.per_day_salary) +
+      row('Extra Pay (unused Weekly Off × daily)', emp.extra_pay || 0, 'var(--G)') +
+      row('OT Pay (' + (emp.ot_hours || 0) + 'h × ₹' + _prFmt(emp.hourly_rate || 0) + ')', emp.ot_pay || 0, '#4F46E5') +
+      row('Total Earnings', (emp.gross_salary || 0) + (emp.extra_pay || 0) + (emp.ot_pay || 0), 'var(--G)', true) +
+      '</tbody></table>' +
+
+      '<table style="width:100%;border-collapse:collapse;margin-bottom:10px;border:1px solid var(--bdr);border-radius:10px;overflow:hidden">' +
+      '<thead><tr style="background:var(--sur2)"><th colspan="2" style="padding:8px 12px;text-align:left;font-size:11px;color:var(--tx3)">DEDUCTIONS</th></tr></thead><tbody>' +
+      row('PF', emp.pf_deduction || 0, 'var(--R)') +
+      row('ESI', emp.esi_deduction || 0, 'var(--R)') +
+      row('TDS', emp.tds || 0, 'var(--R)') +
+      row('Other', emp.other_deductions || 0, 'var(--R)') +
+      row('Unpaid / LWP (' + (emp.unpaid_days || emp.lwp_days || 0) + 'd × ₹' + _prFmt(emp.daily_rate || emp.per_day_salary || 0) + ')', emp.lwp_deduction || 0, 'var(--R)') +
+      row('Total Deductions', emp.total_deductions || 0, 'var(--R)', true) +
+      '</tbody></table>' +
+
+      '<div style="background:var(--sur2);border-radius:10px;padding:12px 14px;font-size:11px;color:var(--tx2);line-height:1.6">' +
+      '<strong>Policy:</strong> Salary on fixed 30-day basis. Weekly Off entitlement = Sundays in month (' + (emp.week_off_entitlement || 0) + '). ' +
+      'Unused WO → Extra Pay. Excess WO covered by PTO then Unpaid. OT = hours beyond Office IN–OUT (' + (emp.std_hours || 0) + 'h/day).' +
+      '</div>';
+
+  var body =
+    '<div style="margin-bottom:14px">' +
+    '<div style="display:flex;gap:0;border:1px solid var(--bdr);border-radius:10px;overflow:hidden;background:var(--sur2)">' +
+    '<button id="prTab_att" onclick="_prTab(\'att\')" style="flex:1;padding:9px 12px;border:none;background:var(--P);color:#fff;font-size:12px;font-weight:800;cursor:pointer"><i class="fas fa-calendar-check"></i> Attendance</button>' +
+    '<button id="prTab_sal" onclick="_prTab(\'sal\')" style="flex:1;padding:9px 12px;border:none;background:transparent;color:var(--tx2);font-size:12px;font-weight:700;cursor:pointer"><i class="fas fa-indian-rupee-sign"></i> Salary</button>' +
+    '</div></div>' +
+    '<div id="prPanelAtt">' + headerHtml + calHtml + timingHtml + '</div>' +
+    '<div id="prPanelSal" style="display:none">' + salaryHtml + '</div>';
+
+  _openModal(
+    '<div style="display:flex;align-items:center;gap:10px">' +
+    _avatarEl(emp.emp_name, emp.photo, 34) +
+    '<div><div style="font-weight:800;font-size:15px">' + _esc(emp.emp_name) + '</div>' +
+    '<div style="font-size:11px;color:var(--tx3)">' + _esc(emp.dept) + ' · ' + _esc(monthLbl) + '</div></div>' +
+    '<button class="btn btn-xs btn-outline" style="margin-left:auto" data-empid="' + _esc(emp.emp_id) + '" ' +
+    'onclick="_prDownloadCard(this.getAttribute(\'data-empid\'))"><i class="fas fa-download"></i> Card</button></div>',
+    body
+  );
+
+  setTimeout(function () {
+    var m = document.getElementById('modal');
+    if (m) {
+      var isMobile = window.innerWidth <= 900;
+      m.style.maxWidth = isMobile ? '100%' : '720px';
+      m.style.width = isMobile ? '100vw' : '96vw';
     }
-
-    function _prOpenDetail(empId) {
-      if (!_prData) return;
-      var emp = null;
-      (_prData.employees || []).forEach(function (e) {if (e.emp_id === empId) emp = e;});
-      if (!emp) return;
-
-      var monthLbl = (function () {
-        try {var p = _prData.month.split('-'); return new Date(+p[0], +p[1] - 1, 1).toLocaleString('en-IN', {month: 'long', year: 'numeric'});}
-        catch (e2) {return _prData.month;}
-      })();
-
-      var log = emp.daily_log || [];
-      var attPct = emp.total_working_days > 0 ? Math.round(emp.payable_days / emp.total_working_days * 100) : 0;
-      var pctColor = attPct >= 90 ? 'var(--G)' : attPct >= 75 ? 'var(--O)' : 'var(--R)';
-
-      // ── Status colors / labels ────────────────────────────────────────────
-      var bgOf = {
-        P: 'var(--Gl)', HD: 'var(--Tl)', A: 'var(--Rl)', WO: 'var(--sur2)',
-        H: '#EEF2FF', LWP: 'var(--Rl)', CL: 'var(--Pl)', SL: 'var(--Pl)', PL: 'var(--Pl)'
-      };
-      var clrOf = {
-        P: 'var(--G)', HD: 'var(--T)', A: 'var(--R)', WO: 'var(--tx3)',
-        H: '#6366F1', LWP: 'var(--R)', CL: 'var(--P)', SL: 'var(--P)', PL: 'var(--P)'
-      };
-
-      // ── Header (name + month + key metrics) ───────────────────────────────
-      var headerHtml =
-        '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(80px,1fr));gap:8px;margin-bottom:18px">' +
-        [
-          {lbl: 'Working Days', val: emp.total_working_days, c: 'var(--tx)', ico: 'fa-calendar-days'},
-          {lbl: 'Present', val: emp.present_days, c: 'var(--G)', ico: 'fa-circle-check'},
-          {lbl: 'Paid Leave', val: emp.leave_days, c: 'var(--T)', ico: 'fa-umbrella-beach'},
-          {lbl: 'Absent / LWP', val: emp.absent_days + emp.lwp_days, c: (emp.absent_days + emp.lwp_days) > 0 ? 'var(--R)' : 'var(--tx3)', ico: 'fa-circle-xmark'},
-          {lbl: 'Holidays', val: emp.holiday_days, c: '#6366F1', ico: 'fa-star'},
-          {lbl: 'Week Off', val: emp.week_off_days, c: 'var(--tx3)', ico: 'fa-moon'}
-        ].map(function (s) {
-          return '<div style="background:var(--sur2);border-radius:10px;padding:10px 12px;text-align:center;border:1px solid var(--bdr)">' +
-            '<i class="fas ' + s.ico + '" style="color:' + s.c + ';font-size:14px;margin-bottom:4px;display:block"></i>' +
-            '<div style="font-size:18px;font-weight:900;color:' + s.c + ';line-height:1">' + s.val + '</div>' +
-            '<div style="font-size:9px;color:var(--tx3);text-transform:uppercase;font-weight:800;margin-top:3px;line-height:1.2">' + s.lbl + '</div>' +
-            '</div>';
-        }).join('') + '</div>' +
-        // Attendance progress bar
-        '<div style="margin-bottom:18px">' +
-        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
-        '<span style="font-size:11px;font-weight:700;color:var(--tx2)">Attendance Rate</span>' +
-        '<span style="font-size:15px;font-weight:900;color:' + pctColor + '">' + attPct + '%</span></div>' +
-        '<div style="height:8px;background:var(--sur2);border-radius:8px;overflow:hidden">' +
-        '<div style="height:100%;width:' + attPct + '%;background:linear-gradient(90deg,' + pctColor + ',' + pctColor + 'aa);border-radius:8px;transition:width .5s"></div>' +
-        '</div><div style="font-size:10px;color:var(--tx3);margin-top:4px">' + emp.payable_days + ' payable days out of ' + emp.total_working_days + ' working days</div>' +
-        '</div>';
-
-      // ── Calendar ──────────────────────────────────────────────────────────
-      var calHtml =
-        '<div style="font-size:11px;font-weight:800;color:var(--tx2);text-transform:uppercase;margin-bottom:8px;display:flex;align-items:center;gap:6px">' +
-        '<i class="fas fa-calendar-alt" style="color:var(--P)"></i> ' + monthLbl + ' — Day by Day</div>' +
-        // Legend
-        '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">' +
-        [['P', 'Present', 'var(--Gl)', 'var(--G)'], ['HD', 'Half Day', 'var(--Tl)', 'var(--T)'],
-        ['A', 'Absent', 'var(--Rl)', 'var(--R)'], ['WO', 'Week Off', 'var(--sur2)', 'var(--tx3)'],
-        ['H', 'Holiday', '#EEF2FF', '#6366F1'], ['L', 'Leave', 'var(--Pl)', 'var(--P)']].map(function (x) {
-          return '<div style="display:flex;align-items:center;gap:4px">' +
-            '<div style="width:10px;height:10px;border-radius:2px;background:' + x[2] + '"></div>' +
-            '<span style="font-size:9px;color:var(--tx3);font-weight:600">' + x[1] + '</span></div>';
-        }).join('') + '</div>' +
-        '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;text-align:center;margin-bottom:16px">';
-
-      // Day headers
-      ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].forEach(function (h) {
-        calHtml += '<div style="font-size:9px;font-weight:800;color:var(--tx3);padding:4px 0;text-align:center">' + h + '</div>';
-      });
-
-      // Blank filler
-      var firstDow = log.length ? new Date(log[0].date + 'T00:00:00').getDay() : 0;
-      for (var b = 0; b < firstDow; b++) calHtml += '<div></div>';
-
-      log.forEach(function (day) {
-        var d = day.date.split('-')[2];
-        var bg = bgOf[day.status] || 'var(--sur2)';
-        var clr = clrOf[day.status] || 'var(--tx3)';
-        var lbl = day.status === 'WO' ? 'WO' : day.status;
-        var hasTime = day.in && day.in !== '-' && day.in !== '';
-        var tooltipStr = hasTime ? ('IN: ' + day.in + (day.out && day.out !== '-' ? ' | OUT: ' + day.out : '')) : '';
-
-        calHtml += '<div style="padding:4px 1px;border-radius:6px;background:' + bg + ';text-align:center;' +
-          (hasTime ? 'cursor:pointer;' : '') + 'border:1px solid ' + (hasTime ? clr + '44' : 'transparent') + '"' +
-          (tooltipStr ? ' title="' + tooltipStr + '"' : '') + '>' +
-          '<div style="font-size:9px;color:var(--tx3);font-weight:600">' + d + '</div>' +
-          '<div style="font-size:9px;color:' + clr + ';font-weight:800">' + lbl + '</div>' +
-          (hasTime ? '<div style="font-size:7.5px;color:' + clr + ';opacity:.75;line-height:1">' + day.in + '</div>' : '') +
-          '</div>';
-      });
-      calHtml += '</div>';
-
-      // ── Timing table ──────────────────────────────────────────────────────
-      var presentLogs = log.filter(function (d) {return d.in && d.in !== '-' && d.in !== '';});
-      var timingHtml = '';
-      if (presentLogs.length > 0) {
-        var DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-        timingHtml =
-          '<div style="font-size:11px;font-weight:800;color:var(--tx2);text-transform:uppercase;margin-bottom:8px;display:flex;align-items:center;gap:6px">' +
-          '<i class="fas fa-clock" style="color:var(--T)"></i> Punch Timing</div>' +
-          '<div style="overflow-x:auto;border-radius:10px;border:1px solid var(--bdr)">' +
-          '<table style="width:100%;border-collapse:collapse;font-size:12px">' +
-          '<thead><tr style="background:var(--sur2)">' +
-          '<th style="padding:8px 12px;text-align:left;font-size:10px;color:var(--tx3);font-weight:800;text-transform:uppercase;border-bottom:1px solid var(--bdr)">Date</th>' +
-          '<th style="padding:8px 10px;font-size:10px;color:var(--tx3);font-weight:800;text-transform:uppercase;border-bottom:1px solid var(--bdr)">Day</th>' +
-          '<th style="padding:8px 10px;font-size:10px;font-weight:800;text-transform:uppercase;color:var(--G);border-bottom:1px solid var(--bdr)">IN ↓</th>' +
-          '<th style="padding:8px 10px;font-size:10px;font-weight:800;text-transform:uppercase;color:var(--R);border-bottom:1px solid var(--bdr)">OUT ↑</th>' +
-          '<th style="padding:8px 10px;text-align:center;font-size:10px;color:var(--tx3);font-weight:800;text-transform:uppercase;border-bottom:1px solid var(--bdr)">Hours</th>' +
-          '<th style="padding:8px 10px;text-align:center;font-size:10px;color:var(--tx3);font-weight:800;text-transform:uppercase;border-bottom:1px solid var(--bdr)">Status</th>' +
-          '</tr></thead><tbody>' +
-          presentLogs.map(function (d, i) {
-            var dow = DAY_NAMES[new Date(d.date + 'T00:00:00').getDay()];
-            var dd = d.date.split('-')[2];
-            var rowBg = i % 2 === 0 ? '' : 'background:var(--sur2)';
-            var stClr = d.status === 'P' ? 'var(--G)' : d.status === 'HD' ? 'var(--T)' : 'var(--O)';
-            var stBg = d.status === 'P' ? 'var(--Gl)' : d.status === 'HD' ? 'var(--Tl)' : 'var(--Ol)';
-            var outVal = d.out && d.out !== '-' ? d.out : '—';
-            var hrVal = d.hours && d.hours !== '-' ? d.hours : '—';
-            return '<tr style="' + rowBg + ';border-bottom:1px solid var(--bdr)">' +
-              '<td style="padding:9px 12px;font-weight:800;font-size:13px">' + dd + '</td>' +
-              '<td style="padding:9px 10px;font-size:11px;color:var(--tx3);font-weight:600">' + dow + '</td>' +
-              '<td style="padding:9px 10px;font-weight:800;font-size:13px;color:var(--G)">' + (d.in || '—') + '</td>' +
-              '<td style="padding:9px 10px;font-weight:800;font-size:13px;color:var(--R)">' + outVal + '</td>' +
-              '<td style="padding:9px 10px;text-align:center;font-size:12px;color:var(--tx2)">' + hrVal + '</td>' +
-              '<td style="padding:9px 10px;text-align:center">' +
-              '<span style="padding:2px 8px;border-radius:6px;font-size:10px;font-weight:800;background:' + stBg + ';color:' + stClr + '">' + d.status + '</span>' +
-              '</td></tr>';
-          }).join('') +
-          '</tbody></table></div>';
-      } else {
-        timingHtml = '<div style="padding:14px;background:var(--sur2);border-radius:10px;font-size:12px;color:var(--tx3);text-align:center">' +
-          '<i class="fas fa-clock-rotate-left" style="margin-bottom:6px;display:block;font-size:20px"></i>' +
-          'Attendance timing data unavailable for this month</div>';
-      }
-
-      // ── Salary breakdown ──────────────────────────────────────────────────
-      function srow(lbl, val, c, bold) {
-        return '<tr><td style="padding:7px 12px;color:var(--tx2);font-size:13px' + (bold ? ';font-weight:800' : '') + '">' + lbl + '</td>' +
-          '<td style="padding:7px 12px;font-weight:' + (bold ? '900' : '700') + ';text-align:right;font-size:13px;color:' + (c || 'var(--tx)') + '">₹' + _prFmt(val) + '</td></tr>';
-      }
-
-      var hasSalary = emp.basic_salary > 0;
-      var salaryHtml = !hasSalary
-        ? '<div style="padding:20px;text-align:center;background:var(--sur2);border-radius:10px;color:var(--O)">' +
-        '<i class="fas fa-triangle-exclamation" style="font-size:24px;margin-bottom:8px;display:block"></i>' +
-        '<div style="font-weight:700">Salary not configured in Doer List</div>' +
-        '<div style="font-size:11px;color:var(--tx3);margin-top:4px">Doer List mein Basic Salary, HRA, PF etc. columns add karo</div>' +
-        '</div>'
-        : (function () {
-          // Single compact salary table — works at any width
-          function row(lbl, amt, c, bold) {
-            return '<tr>' +
-              '<td style="padding:6px 10px;font-size:12px;color:' + (bold ? 'var(--tx)' : 'var(--tx2)') +
-              ';font-weight:' + (bold ? '800' : '500') + '">' + lbl + '</td>' +
-              '<td style="padding:6px 10px;font-size:12px;font-weight:' + (bold ? '900' : '600') +
-              ';text-align:right;color:' + (c || 'var(--tx)') + '">₹' + _prFmt(amt) + '</td>' +
-              '</tr>';
-          }
-          var lwpRow = emp.lwp_days > 0
-            ? row('LWP (' + emp.lwp_days + 'd × ₹' + _prFmt(emp.per_day_salary) + ')', emp.lwp_deduction, 'var(--R)')
-            : '';
-
-          return '' +
-            // Compact two-column overview row
-            '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px">' +
-            '<div style="background:var(--Gl);border-radius:8px;padding:10px;text-align:center">' +
-            '<div style="font-size:9px;font-weight:800;color:var(--G);text-transform:uppercase">Gross</div>' +
-            '<div style="font-size:16px;font-weight:900;color:var(--G)">₹' + _prFmt(emp.gross_salary) + '</div></div>' +
-            '<div style="background:var(--Rl);border-radius:8px;padding:10px;text-align:center">' +
-            '<div style="font-size:9px;font-weight:800;color:var(--R);text-transform:uppercase">Deductions</div>' +
-            '<div style="font-size:16px;font-weight:900;color:var(--R)">₹' + _prFmt(emp.total_deductions) + '</div></div>' +
-            '<div style="background:linear-gradient(135deg,var(--G),#059669);border-radius:8px;padding:10px;text-align:center">' +
-            '<div style="font-size:9px;font-weight:800;color:#fff;opacity:.8;text-transform:uppercase">Net Pay</div>' +
-            '<div style="font-size:18px;font-weight:900;color:#fff">₹' + _prFmt(emp.net_salary) + '</div></div>' +
-            '</div>' +
-
-            // Earnings + Deductions in one table with section headers
-            '<div style="border:1px solid var(--bdr);border-radius:10px;overflow:hidden">' +
-            '<table style="width:100%;border-collapse:collapse">' +
-
-            // Earnings section header
-            '<tr style="background:var(--Gl)">' +
-            '<td colspan="2" style="padding:7px 10px;font-size:10px;font-weight:800;color:var(--G);text-transform:uppercase;letter-spacing:.5px">' +
-            '<i class="fas fa-arrow-up-right-dots"></i> Earnings</td></tr>' +
-            row('Basic Salary', emp.basic_salary) +
-            (emp.hra > 0 ? row('HRA', emp.hra) : '') +
-            (emp.conveyance > 0 ? row('Conveyance', emp.conveyance) : '') +
-            (emp.other_allowances > 0 ? row('Other Allowances', emp.other_allowances) : '') +
-            row('Gross Total', emp.gross_salary, 'var(--G)', true) +
-
-            // Deductions section header
-            '<tr style="background:var(--Rl)">' +
-            '<td colspan="2" style="padding:7px 10px;font-size:10px;font-weight:800;color:var(--R);text-transform:uppercase;letter-spacing:.5px">' +
-            '<i class="fas fa-arrow-down-wide-short"></i> Deductions</td></tr>' +
-            (emp.pf_deduction > 0 ? row('PF', emp.pf_deduction, 'var(--R)') : '') +
-            (emp.esi_deduction > 0 ? row('ESI', emp.esi_deduction, 'var(--R)') : '') +
-            (emp.tds > 0 ? row('TDS', emp.tds, 'var(--R)') : '') +
-            (emp.other_deductions > 0 ? row('Other', emp.other_deductions, 'var(--R)') : '') +
-            lwpRow +
-            row('Total Deductions', emp.total_deductions, 'var(--R)', true) +
-
-            '</table></div>' +
-
-            // Net pay footer
-            '<div style="margin-top:12px;background:linear-gradient(135deg,var(--G),#059669);border-radius:10px;padding:14px 18px;display:flex;justify-content:space-between;align-items:center">' +
-            '<div><div style="font-size:9px;color:#fff;opacity:.8;text-transform:uppercase;font-weight:800">Net Salary Payable</div>' +
-            '<div style="font-size:11px;color:#fff;opacity:.7">' + monthLbl + ' · ' + emp.payable_days + ' days</div></div>' +
-            '<div style="font-size:24px;font-weight:900;color:#fff">₹' + _prFmt(emp.net_salary) + '</div>' +
-            '</div>';
-        })();
-
-
-      // ── Tabbed modal content ──────────────────────────────────────────────
-      var body =
-        '<div style="margin-bottom:14px">' +
-        '<div style="display:flex;gap:0;border:1px solid var(--bdr);border-radius:10px;overflow:hidden;background:var(--sur2)">' +
-        '<button id="prTab_att" onclick="_prTab(\'att\')" style="flex:1;padding:9px 12px;border:none;background:var(--P);color:#fff;font-size:12px;font-weight:800;cursor:pointer;transition:.2s"><i class="fas fa-calendar-check"></i> Attendance</button>' +
-        '<button id="prTab_sal" onclick="_prTab(\'sal\')" style="flex:1;padding:9px 12px;border:none;background:transparent;color:var(--tx2);font-size:12px;font-weight:700;cursor:pointer;transition:.2s"><i class="fas fa-indian-rupee-sign"></i> Salary</button>' +
-        '</div></div>' +
-
-        '<div id="prPanelAtt">' + headerHtml + calHtml + timingHtml + '</div>' +
-        '<div id="prPanelSal" style="display:none">' + salaryHtml + '</div>';
-
-      _openModal(
-        '<div style="display:flex;align-items:center;gap:10px">' +
-        _avatarEl(emp.emp_name, emp.photo, 34) +
-        '<div><div style="font-weight:800;font-size:15px">' + _esc(emp.emp_name) + '</div>' +
-        '<div style="font-size:11px;color:var(--tx3)">' + _esc(emp.dept) + ' · ' + _esc(monthLbl) + '</div></div>' +
-        '<button class="btn btn-xs btn-outline" style="margin-left:auto" ' +
-        'data-empid="' + _esc(emp.emp_id) + '" ' +
-        'onclick="_prDownloadCard(this.getAttribute(\'data-empid\'))" title="Download salary card">' +
-        '<i class="fas fa-download"></i> Download</button>' +
-        '</div>',
-        body
-      );
-
-      // Responsive modal sizing
-      setTimeout(function () {
-        var m = document.getElementById('modal');
-        if (m) {
-          var isMobile = window.innerWidth <= 900;
-          m.style.maxWidth = isMobile ? '100%' : '720px';
-          m.style.width = isMobile ? '100vw' : '96vw';
-          m.style.margin = isMobile ? '0' : '';
-          m.style.borderRadius = isMobile ? '16px 16px 0 0' : '';
-        }
-      }, 40);
-    }
+  }, 40);
+}
 
     // Tab switcher for salary sheet detail modal
     function _prTab(tab) {
@@ -14097,19 +13973,19 @@ function _downloadCSV(rows, filename) {
 
 function _prExportCSV() {
   if (!_prData || !_prData.employees) { _toast('No data to export', 'err'); return; }
-  var rows = [
-    ['Emp ID', 'Name', 'Department', 'Monthly Salary', 'Daily Rate', 'Std Hours',
-      'WO Entitlement', 'WO Taken', 'WO Worked', 'Extra Pay (WO)',
-      'OT Hours', 'OT Pay',
-      'PTO Taken', 'PTO Annual', 'Absent Days', 'Unpaid Days',
-      'Present Days', 'Half Days',
-      'Gross', 'PF', 'ESI', 'TDS', 'Other Ded', 'LWP Ded', 'Total Ded', 'NET PAY']
-  ];
+  var rows = [[
+    'Emp ID', 'Name', 'Department',
+    'Monthly Salary', 'Daily Rate', 'Std Hours/Day',
+    'WO Entitlement', 'WO Taken', 'WO Worked', 'Extra Pay (WO)',
+    'OT Hours', 'OT Pay', 'Hourly Rate',
+    'PTO Taken', 'PTO Annual',
+    'Present', 'Half Days', 'Absent', 'Unpaid Days',
+    'Gross', 'PF', 'ESI', 'TDS', 'Other Ded', 'Unpaid Ded', 'Total Ded',
+    'NET PAY'
+  ]];
   _prData.employees.forEach(function (e) {
     rows.push([
-      e.emp_id,
-      e.emp_name,
-      e.dept,
+      e.emp_id, e.emp_name, e.dept,
       e.gross_salary || e.basic_salary || 0,
       e.daily_rate || e.per_day_salary || 0,
       e.std_hours || 0,
@@ -14119,12 +13995,13 @@ function _prExportCSV() {
       e.extra_pay || 0,
       e.ot_hours || 0,
       e.ot_pay || 0,
+      e.hourly_rate || 0,
       e.pto_taken || 0,
       e.pto_annual || 0,
-      e.absent_days || 0,
-      e.unpaid_days || e.lwp_days || 0,
       e.present_days || 0,
       e.half_days || 0,
+      e.absent_days || 0,
+      e.unpaid_days || e.lwp_days || 0,
       e.gross_salary || 0,
       e.pf_deduction || 0,
       e.esi_deduction || 0,
@@ -14141,7 +14018,7 @@ function _prExportCSV() {
     _prData.employees.reduce(function (s, e) { return s + (e.extra_pay || 0); }, 0),
     _prData.employees.reduce(function (s, e) { return s + (e.ot_hours || 0); }, 0),
     _prData.employees.reduce(function (s, e) { return s + (e.ot_pay || 0); }, 0),
-    '', '', '', '', '', '',
+    '', '', '', '', '', '', '',
     _prData.summary.total_gross || 0,
     '', '', '', '', '',
     _prData.summary.total_deductions || 0,
@@ -14150,7 +14027,6 @@ function _prExportCSV() {
   _downloadCSV(rows, 'salary_summary_' + (_prData.month || _currMonth()) + '.csv');
   _toast('Summary CSV downloaded', 'ok');
 }
-
 
 function _downloadCSV(rows, filename) {
   var csv = rows.map(function (r) {
