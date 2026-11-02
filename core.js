@@ -14002,7 +14002,7 @@ function _prOpenDetail(empId) {
 
     '<table style="width:100%;border-collapse:collapse;margin-bottom:10px;border:1px solid var(--bdr);border-radius:10px;overflow:hidden">' +
     '<thead><tr style="background:var(--sur2)"><th colspan="2" style="padding:8px 12px;text-align:left;font-size:11px;color:var(--tx3)">EARNINGS</th></tr></thead><tbody>' +
-    row('Monthly Salary (30-day basis)', emp.gross_salary || emp.basic_salary) +
+row('Monthly Salary (' + (emp.days_in_month || _prData.days_in_month || 30) + '-day month)', emp.gross_salary || emp.basic_salary) +
     row('Daily Rate', emp.daily_rate || emp.per_day_salary) +
     row('Extra Pay (unused Weekly Off × daily)', emp.extra_pay || 0, 'var(--G)') +
     row('OT Pay (' + (emp.ot_hours || 0) + 'h × ₹' + _prFmt(emp.hourly_rate || 0) + ')', emp.ot_pay || 0, '#4F46E5') +
@@ -14017,7 +14017,7 @@ function _prOpenDetail(empId) {
     '</tbody></table>' +
 
     '<div style="background:var(--sur2);border-radius:10px;padding:12px 14px;font-size:11px;color:var(--tx2);line-height:1.6">' +
-    '<strong>Policy:</strong> Fixed 30-day salary. Weekly Off = Sundays in month (' + (emp.week_off_entitlement || 0) + '). ' +
+    '<strong>Policy:</strong> Salary ÷ days in this month (' + (emp.days_in_month || _prData.days_in_month || 30) + '). Weekly Off = Sundays (' + (emp.week_off_entitlement || 0) + '). ' +
     'Unused WO → Extra Pay. Excess WO → PTO then Unpaid. ' +
     'Net hours vs Office IN–OUT (' + (emp.std_hours || 0) + 'h/day): overtime paid, undertime deducted.' +
     '</div>';
