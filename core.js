@@ -13942,7 +13942,7 @@ function _prOpenDetail(empId) {
   var calHtml = '<div style="margin-bottom:16px"><div style="font-size:12px;font-weight:800;margin-bottom:8px;color:var(--tx2)"><i class="fas fa-calendar-day"></i> Daily Log</div>' +
     '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(44px,1fr));gap:4px">';
   log.forEach(function (d) {
-    if (d.status === '—') return;
+    
     var st = d.status || 'A';
     var bg = st === 'P' ? 'var(--Gl)' : st === 'HD' ? 'var(--Tl)' : st === 'A' ? 'var(--Rl)' :
       (st === 'Weekly Off' || st === 'WO') ? 'var(--sur2)' : st === 'PTO' ? 'var(--Pl)' : 'var(--sur2)';
@@ -13960,7 +13960,7 @@ function _prOpenDetail(empId) {
       return '<th style="padding:7px 8px;text-align:left;font-weight:800;color:var(--tx3)">' + h + '</th>';
     }).join('') + '</tr></thead><tbody>';
   log.forEach(function (d) {
-    if (d.status === '—') return;
+    
     var dow = '';
     try {
       var p = (d.date || '').split('-');
