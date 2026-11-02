@@ -9126,23 +9126,30 @@ function _claMarkCustom() {
 
 function _claApplyPreset() {
   var p = (document.getElementById('claPreset') || {}).value || 'month';
-  if (p === 'custom') return; // user picked dates manually — leave inputs alone
+  if (p === 'custom') return;
   var t = new Date();
-  function iso(d) { return d.toISOString().slice(0, 10); }
-  var from, to = iso(t);
+  var from, to = _isoLocal(t);
   if (p === 'today') { from = to; }
-  else if (p === 'yesterday') { var y = new Date(t); y.setDate(y.getDate() - 1); from = iso(y); to = iso(y); }
-  else if (p === 'week') { var w = new Date(t); w.setDate(w.getDate() - w.getDay()); from = iso(w); }
-  else if (p === 'lastmonth') {
-    var lm = new Date(t.getFullYear(), t.getMonth() - 1, 1);
-    var lmEnd = new Date(t.getFullYear(), t.getMonth(), 0);
-    from = iso(lm); to = iso(lmEnd);
+  else if (p === 'yesterday') {
+    var y = new Date(t); y.setDate(y.getDate() - 1);
+    from = _isoLocal(y); to = from;
+  } else if (p === 'week') {
+    var w = new Date(t); w.setDate(w.getDate() - w.getDay());
+    from = _isoLocal(w);
+  } else if (p === 'lastmonth') {
+    from = _isoLocal(new Date(t.getFullYear(), t.getMonth() - 1, 1));
+    to = _isoLocal(new Date(t.getFullYear(), t.getMonth(), 0));
+  } else if (p === 'quarter') {
+    from = _isoLocal(new Date(t.getFullYear(), Math.floor(t.getMonth() / 3) * 3, 1));
+  } else if (p === 'year') {
+    from = t.getFullYear() + '-01-01';
+  } else {
+    from = _isoLocal(new Date(t.getFullYear(), t.getMonth(), 1));
   }
-  else if (p === 'quarter') { from = iso(new Date(t.getFullYear(), Math.floor(t.getMonth() / 3) * 3, 1)); }
-  else if (p === 'year') { from = t.getFullYear() + '-01-01'; }
-  else { from = iso(t).slice(0, 8) + '01'; } // 'month' / fallback
-  document.getElementById('claFrom').value = from;
-  document.getElementById('claTo').value = to;
+  var fEl = document.getElementById('claFrom');
+  var tEl = document.getElementById('claTo');
+  if (fEl) fEl.value = from;
+  if (tEl) tEl.value = to;
   _loadCla();
 }
 
@@ -9864,20 +9871,30 @@ function _daMarkCustom() {
 }
 
 function _daApplyPreset() {
-  var p = (document.getElementById('daPreset') || {}).value || 'alltime';
+  var p = (document.getElementById('daPreset') || {}).value || 'month';
   if (p === 'custom') return;
   var t = new Date();
-  function iso(d) { return d.toISOString().slice(0, 10); }
-  var from, to = iso(t);
-  if (p === 'alltime') { from = '2020-01-01'; }
-  else if (p === 'month') { from = iso(t).slice(0, 8) + '01'; }
-  else if (p === 'last3m') { var l3 = new Date(t); l3.setMonth(l3.getMonth() - 3); from = iso(l3); }
-  else if (p === 'quarter') { from = iso(new Date(t.getFullYear(), Math.floor(t.getMonth() / 3) * 3, 1)); }
-  else if (p === 'year') { from = t.getFullYear() + '-01-01'; }
-  else { from = '2020-01-01'; }
-  document.getElementById('daFrom').value = from;
-  document.getElementById('daTo').value = to;
-  _loadDa();
+  var from, to = _isoLocal(t);
+  if (p === 'alltime') {
+    from = '2020-01-01';
+  } else if (p === 'last3m') {
+    var l3 = new Date(t); l3.setMonth(l3.getMonth() - 3);
+    from = _isoLocal(l3);
+  } else if (p === 'lastmonth') {
+    from = _isoLocal(new Date(t.getFullYear(), t.getMonth() - 1, 1));
+    to = _isoLocal(new Date(t.getFullYear(), t.getMonth(), 0));
+  } else if (p === 'quarter') {
+    from = _isoLocal(new Date(t.getFullYear(), Math.floor(t.getMonth() / 3) * 3, 1));
+  } else if (p === 'year') {
+    from = t.getFullYear() + '-01-01';
+  } else {
+    from = _isoLocal(new Date(t.getFullYear(), t.getMonth(), 1));
+  }
+  var fEl = document.getElementById('daFrom');
+  var tEl = document.getElementById('daTo');
+  if (fEl) fEl.value = from;
+  if (tEl) tEl.value = to;
+  if (typeof _loadDa === 'function') _loadDa();
 }
 
 function _loadDa() {
@@ -10470,20 +10487,24 @@ function _attApplyPreset() {
   var p = (document.getElementById('attPreset') || {}).value || 'month';
   if (p === 'custom') return;
   var t = new Date();
-  function iso(d) { return d.toISOString().slice(0, 10); }
-  var from, to = iso(t);
+  var from, to = _isoLocal(t);
   if (p === 'lastmonth') {
-    var lm = new Date(t.getFullYear(), t.getMonth() - 1, 1);
-    var lmEnd = new Date(t.getFullYear(), t.getMonth(), 0);
-    from = iso(lm); to = iso(lmEnd);
+    from = _isoLocal(new Date(t.getFullYear(), t.getMonth() - 1, 1));
+    to = _isoLocal(new Date(t.getFullYear(), t.getMonth(), 0));
+  } else if (p === 'quarter') {
+    from = _isoLocal(new Date(t.getFullYear(), Math.floor(t.getMonth() / 3) * 3, 1));
+  } else if (p === 'year') {
+    from = t.getFullYear() + '-01-01';
+  } else {
+    from = _isoLocal(new Date(t.getFullYear(), t.getMonth(), 1));
   }
-  else if (p === 'quarter') { from = iso(new Date(t.getFullYear(), Math.floor(t.getMonth() / 3) * 3, 1)); }
-  else if (p === 'year') { from = t.getFullYear() + '-01-01'; }
-  else { from = iso(t).slice(0, 8) + '01'; }
-  document.getElementById('attFrom').value = from;
-  document.getElementById('attTo').value = to;
+  var fEl = document.getElementById('attFrom');
+  var tEl = document.getElementById('attTo');
+  if (fEl) fEl.value = from;
+  if (tEl) tEl.value = to;
   _loadAtt();
 }
+
 
 // ── Muster Grid embedded in Attendance Analytics ─────────────────────────
 function _loadAttMusterInline(month, dept) {
@@ -12506,18 +12527,21 @@ function _emApplyPreset() {
   var p = (document.getElementById('emPreset') || {}).value || 'month';
   if (p === 'custom') return;
   var t = new Date();
-  function iso(d) { return d.toISOString().slice(0, 10); }
-  var from, to = iso(t);
+  var from, to = _isoLocal(t);
   if (p === 'lastmonth') {
-    var lm = new Date(t.getFullYear(), t.getMonth() - 1, 1);
-    var lmEnd = new Date(t.getFullYear(), t.getMonth(), 0);
-    from = iso(lm); to = iso(lmEnd);
+    from = _isoLocal(new Date(t.getFullYear(), t.getMonth() - 1, 1));
+    to = _isoLocal(new Date(t.getFullYear(), t.getMonth(), 0));
+  } else if (p === 'quarter') {
+    from = _isoLocal(new Date(t.getFullYear(), Math.floor(t.getMonth() / 3) * 3, 1));
+  } else if (p === 'year') {
+    from = t.getFullYear() + '-01-01';
+  } else {
+    from = _isoLocal(new Date(t.getFullYear(), t.getMonth(), 1));
   }
-  else if (p === 'quarter') { from = iso(new Date(t.getFullYear(), Math.floor(t.getMonth() / 3) * 3, 1)); }
-  else if (p === 'year') { from = t.getFullYear() + '-01-01'; }
-  else { from = iso(t).slice(0, 8) + '01'; }
-  document.getElementById('emFrom').value = from;
-  document.getElementById('emTo').value = to;
+  var fEl = document.getElementById('emFrom');
+  var tEl = document.getElementById('emTo');
+  if (fEl) fEl.value = from;
+  if (tEl) tEl.value = to;
   _loadEM();
 }
 
@@ -15782,6 +15806,10 @@ function _exportAttFullDetail() {
   });
 }
 
-
-
+function _isoLocal(d) {
+  var y = d.getFullYear();
+  var m = d.getMonth() + 1;
+  var day = d.getDate();
+  return y + '-' + (m < 10 ? '0' : '') + m + '-' + (day < 10 ? '0' : '') + day;
+}
 
