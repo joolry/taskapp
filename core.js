@@ -13860,8 +13860,9 @@ function _prRenderCards(data) {
   grid.innerHTML = emps.map(function (e) {
     var hasSalary = (e.gross_salary || e.basic_salary) > 0;
     var unpaid = e.unpaid_days || e.lwp_days || 0;
-
     var tags = '';
+    if ((e.pto_eligible || (e.pto_annual || 0) > 0))
+      tags += '<span class="pr-tag" style="background:#ECFDF5;color:#059669;border:1px solid #A7F3D0;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px">PTO</span>';
     if (unpaid > 0)
       tags += '<span class="pr-tag pr-tag-r">Unpaid:' + unpaid + 'd</span>';
     if ((e.extra_pay || 0) > 0)
@@ -13928,7 +13929,7 @@ function _prOpenDetail(empId) {
   }
 
   var headerHtml =
-    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:8px;margin-bottom:16px">' +
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:8px;margin-bottom:10px">' +
     kpi('Present', emp.present_days || 0, 'var(--G)', 'fa-circle-check') +
     kpi('Half Day', emp.half_days || 0, 'var(--O)', 'fa-adjust') +
     kpi('Absent', emp.absent_days || 0, (emp.absent_days || 0) > 0 ? 'var(--R)' : 'var(--tx3)', 'fa-circle-xmark') +
@@ -13937,6 +13938,14 @@ function _prOpenDetail(empId) {
     kpi('PTO', emp.pto_taken || 0, 'var(--T)', 'fa-umbrella-beach') +
     kpi('Net Hrs', emp.net_hour_delta || 0, (emp.net_hour_delta || 0) < 0 ? 'var(--R)' : '#4F46E5', 'fa-clock') +
     kpi('Unpaid', emp.unpaid_days || emp.lwp_days || 0, (emp.unpaid_days || 0) > 0 ? 'var(--R)' : 'var(--tx3)', 'fa-minus-circle') +
+    '</div>' +
+    '<div style="font-size:11px;color:var(--tx2);margin:0 0 14px;padding:8px 12px;background:var(--sur2);border-radius:8px;border:1px solid var(--bdr);line-height:1.5">' +
+      '<strong style="color:var(--tx)">PTO Eligible:</strong> ' +
+      ((emp.pto_eligible || (emp.pto_annual || 0) > 0)
+        ? '<span style="color:#059669;font-weight:700">Yes (11/year)</span>'
+        : '<span style="color:var(--tx3)">No</span>') +
+      ' &nbsp;·&nbsp; <strong>Taken:</strong> ' + (emp.pto_taken || 0) +
+      ' &nbsp;·&nbsp; <strong>Remaining:</strong> ' + (emp.pto_remaining != null ? emp.pto_remaining : '—') +
     '</div>';
 
   var calHtml = '<div style="margin-bottom:16px"><div style="font-size:12px;font-weight:800;margin-bottom:8px;color:var(--tx2)"><i class="fas fa-calendar-day"></i> Daily Log</div>' +
@@ -14191,7 +14200,10 @@ function _prDownloadCard(empId) {
   rows.push(['Weekly Off Taken', emp.week_off_taken || 0]);
   rows.push(['Weekly Off Entitlement', emp.week_off_entitlement || 0]);
   rows.push(['WO Extra Worked', emp.week_off_worked || 0]);
+  rows.push(['PTO Eligible', (emp.pto_eligible || (emp.pto_annual || 0) > 0) ? 'Yes' : 'No']);
+  rows.push(['PTO Annual Quota', emp.pto_annual || 0]);
   rows.push(['PTO Taken', emp.pto_taken || 0]);
+  rows.push(['PTO Remaining', emp.pto_remaining != null ? emp.pto_remaining : '']);
   rows.push(['Unpaid Days', emp.unpaid_days || emp.lwp_days || 0]);
   rows.push(['Net Hour Delta', emp.net_hour_delta || 0]);
   rows.push(['OT Hours', emp.ot_hours || 0]);
@@ -15823,4 +15835,3 @@ function _isoLocal(d) {
   var day = d.getDate();
   return y + '-' + (m < 10 ? '0' : '') + m + '-' + (day < 10 ? '0' : '') + day;
 }
-
