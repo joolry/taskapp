@@ -14194,9 +14194,12 @@ function _prDownloadCard(empId) {
   rows.push(['PTO Taken', emp.pto_taken || 0]);
   rows.push(['Unpaid Days', emp.unpaid_days || emp.lwp_days || 0]);
   rows.push(['Net Hour Delta', emp.net_hour_delta || 0]);
+  rows.push(['OT Hours', emp.ot_hours || 0]);
+  rows.push(['Undertime Hours', emp.undertime_hours || 0]);
   rows.push([]);
   rows.push(['EARNINGS']);
   rows.push(['Monthly Salary', emp.gross_salary || emp.basic_salary || 0]);
+  rows.push(['Days in Month', emp.days_in_month || _prData.days_in_month || '']);
   rows.push(['Daily Rate', emp.daily_rate || 0]);
   rows.push(['Extra Pay (unused WO)', emp.extra_pay || 0]);
   rows.push(['OT Pay', emp.ot_pay || 0]);
@@ -14213,13 +14216,21 @@ function _prDownloadCard(empId) {
   rows.push(['Date', 'Day', 'Status', 'IN', 'OUT', 'Hours', 'Delta Hrs']);
 
   (emp.daily_log || []).forEach(function (d) {
-    if (d.status === '—') return;
+    if (!d.date) return;
     var dow = '';
     try {
       var p = (d.date || '').split('-');
       dow = dayNames[new Date(+p[0], +p[1] - 1, +p[2]).getDay()];
     } catch (err) { }
-    rows.push([d.date || '', dow, d.status || '', d.in || '', d.out || '', d.hours || '', d.ot || 0]);
+    rows.push([
+      d.date || '',
+      dow,
+      d.status || '',
+      d.in || '',
+      d.out || '',
+      d.hours || '',
+      d.ot != null ? d.ot : 0
+    ]);
   });
 
   var safeName = String(emp.emp_name || 'employee').replace(/[^\w\-]+/g, '_');
